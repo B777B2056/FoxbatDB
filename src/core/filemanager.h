@@ -10,7 +10,6 @@ namespace foxbatdb {
       std::fstream file;
     };
 
-    std::fstream::pos_type mLogFileMaxSize_;
     std::vector<LogFileWrapper> mLogFilePool_;
     std::size_t mAvailableIdx_;
 

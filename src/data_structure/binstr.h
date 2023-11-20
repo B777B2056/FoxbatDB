@@ -37,8 +37,10 @@ namespace foxbatdb {
     bool IsEmpty() const;
     std::string ToTextString() const;
     const char* ToCString() const;
+    char* ToCString();
     std::byte At(std::size_t idx) const;
     BinaryString SubStr(std::size_t start, std::size_t end) const;
+    void Resize(std::size_t size);
 
     template <std::integral T>
     std::optional<T> ToInteger() const {
@@ -52,7 +54,7 @@ namespace foxbatdb {
     }
 
     template <std::floating_point T>
-    std::optional<T> ToFloating() const {
+    std::optional<T> ToFloat() const {
       T ret;
       auto [_, ec] = std::from_chars<T>(
           mData_.data(), mData_.data() + mData_.size(), ret);

@@ -29,6 +29,7 @@ namespace foxbatdb {
     FileRecordHeader header;
     FileRecordData data;
 
+    std::uint32_t CalculateCRC32Value() const;
     bool LoadFromDisk(std::fstream& file);
     void DumpToDisk(std::fstream& file);
   };
@@ -42,6 +43,7 @@ namespace foxbatdb {
      std::chrono::time_point<std::chrono::steady_clock> createdTime;
 
      ValueObject() = default;
+     void UpdateValue(const BinaryString& k, const BinaryString& v);
 
     public:
      ~ValueObject() = default;
@@ -55,7 +57,6 @@ namespace foxbatdb {
                                              std::chrono::milliseconds ms);
      
      std::optional<BinaryString> GetValue();
-     void UpdateValue(const BinaryString& k, const BinaryString& v);
      void DeleteValue(const BinaryString& k);
 
      void SetExpiration(std::chrono::seconds sec);

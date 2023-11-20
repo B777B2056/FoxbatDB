@@ -48,6 +48,4 @@ namespace foxbatdb {
   };
 
   using PubSubChannelMap = Dict<std::list<CMDSessionPtr>>;
-
-  static constexpr std::string_view CLogFileDir = "db";
 }

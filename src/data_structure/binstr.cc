@@ -29,6 +29,10 @@ namespace foxbatdb {
     return this->mData_.data();
   }
 
+  char* BinaryString::ToCString() {
+    return this->mData_.data();
+  }
+
   std::byte BinaryString::At(std::size_t idx) const {
     return std::byte(this->mData_.at(idx));
   }
@@ -41,6 +45,10 @@ namespace foxbatdb {
      return BinaryString {
          std::string_view{this->mData_.begin() + start, this->mData_.begin() + end}
      };
+  }
+
+  void BinaryString::Resize(std::size_t size) { 
+    this->mData_.resize(size);
   }
 
   void BinaryString::Append(std::byte b) {

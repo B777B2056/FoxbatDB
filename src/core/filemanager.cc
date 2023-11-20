@@ -2,23 +2,23 @@
 #include <filesystem>
 #include <string>
 #include <system_error>
-#include "common/common.h"
+#include "common/flags.h"
 
 namespace foxbatdb {
-  static constexpr std::string_view CFileNamePrefix = "foxbatdb-";
-  static constexpr std::string_view CFileNameSuffix = ".log";
+  static constexpr std::string_view CFileNamePrefix = "foxbat-";
+  static constexpr std::string_view CFileNameSuffix = ".db";
 
   LogFileManager::LogFileManager() {
     // 若文件夹不存在，则创建文件夹
-    if (!std::filesystem::exists(CLogFileDir) ||
-        !std::filesystem::is_directory(CLogFileDir)) {
-      if (!std::filesystem::create_directory(CLogFileDir)) {
+    if (!std::filesystem::exists(flags.dbFileDir) ||
+        !std::filesystem::is_directory(flags.dbFileDir)) {
+      if (!std::filesystem::create_directory(flags.dbFileDir)) {
         throw std::runtime_error{"log file directory create failed"};
       }
     }
 
     // 创建文件
-    std::filesystem::current_path(CLogFileDir);
+    std::filesystem::current_path(flags.dbFileDir);
     for (std::size_t i = 0; i < 1; ++i) {
       auto fileName = std::string{CFileNamePrefix} + std::to_string(i) +
                       std::string{CFileNameSuffix};
@@ -29,7 +29,6 @@ namespace foxbatdb {
       }
       mLogFilePool_.emplace_back(LogFileWrapper{.file = std::move(file)});
     }
-    mLogFileMaxSize_ = 1024*1024*1024;
     mLogFilePool_.shrink_to_fit();
     mAvailableIdx_ = 0;
   }
@@ -44,7 +43,7 @@ namespace foxbatdb {
   }
 
   std::fstream* LogFileManager::GetAvailableLogFile() {
-    if (mLogFilePool_[mAvailableIdx_].file.tellp() >= mLogFileMaxSize_) {
+    if (mLogFilePool_[mAvailableIdx_].file.tellp() >= flags.dbFileMaxRecordNum) {
       ++mAvailableIdx_;
       if (mAvailableIdx_ >= mLogFilePool_.size()) {
         PoolExpand();
@@ -55,7 +54,7 @@ namespace foxbatdb {
 
   void LogFileManager::PoolExpand() {
     auto poolSize = mLogFilePool_.size();
-    std::filesystem::current_path(CLogFileDir);
+    std::filesystem::current_path(flags.dbFileDir);
     for (std::size_t i = poolSize; i < 1 + poolSize; ++i) {
       auto fileName = std::string{CFileNamePrefix} + std::to_string(i) +
                       std::string{CFileNameSuffix};

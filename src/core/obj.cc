@@ -1,41 +1,91 @@
 #include "obj.h"
 #include <climits>
+#include "common/flags.h"
 #include "filemanager.h"
 #include "utils/utils.h"
 
 namespace foxbatdb {
+  static bool ValidateFileRecordHeader(const FileRecordHeader& header) { 
+    if (!utils::IsValidTimestamp(header.timestamp))
+      return false;
+
+    if (header.dbIdx > flags.dbMaxNum)
+      return false;
+
+    if (header.keySize > flags.keyMaxBytes)
+      return false;
+
+    if (header.valSize > flags.valMaxBytes)
+      return false;
+
+    return true;
+  }
+
+  // CRC32算法表
+  static std::uint32_t CRC32Table[256];
+
+  // 生成CRC32表
+  static void GenerateCRC32Table() {
+    for (int i = 0; i < 256; ++i) {
+      std::uint32_t crc = i;
+      for (int j = 0; j < 8; ++j) {
+        crc = (crc >> 1) ^ ((crc & 1) ? 0xEDB88320 : 0);
+      }
+      CRC32Table[i] = crc;
+    }
+  }
+
+  std::uint32_t FileRecord::CalculateCRC32Value() const {
+    static bool IsCRC32TableInited = false;
+    if (!IsCRC32TableInited) {
+      GenerateCRC32Table();
+      IsCRC32TableInited = true;
+    }
+
+    std::uint32_t crc = 0xFFFFFFFF;
+
+    auto calcCRC32Once = [&crc](const char* buf, std::size_t size) -> void {
+      for (std::size_t i = 0; i < size; ++i) {
+        crc = (crc >> 8) ^ CRC32Table[(crc ^ buf[i]) & 0xFF];
+      }
+    };
+
+    calcCRC32Once(reinterpret_cast<const char*>(&header.dbIdx),
+                  sizeof(header.dbIdx));
+    calcCRC32Once(reinterpret_cast<const char*>(&header.timestamp),
+                  sizeof(header.timestamp));
+    calcCRC32Once(reinterpret_cast<const char*>(&header.dbIdx),
+                  sizeof(header.dbIdx));
+    calcCRC32Once(reinterpret_cast<const char*>(&header.keySize),
+                  sizeof(header.keySize));
+    calcCRC32Once(reinterpret_cast<const char*>(&header.valSize),
+                  sizeof(header.valSize));
+    calcCRC32Once(data.key.ToCString(), header.keySize);
+    calcCRC32Once(data.value.ToCString(), header.valSize);
+
+    return crc ^ 0xFFFFFFFF;
+  }
+
   bool FileRecord::LoadFromDisk(std::fstream& file) {
     file.read(reinterpret_cast<char*>(&header), sizeof(header));
 
-    char* keyBuf = new char[header.keySize];
-    file.read(keyBuf, header.keySize);
+    if (!ValidateFileRecordHeader(header))
+      return false;
 
-    char* valBuf = new char[header.valSize];
-    file.read(valBuf, header.valSize);
+    data.key.Resize(header.keySize);
+    data.value.Resize(header.valSize);
 
-    std::uint32_t fileCRC =
-        utils::FillCRC32Value(header, std::string_view{keyBuf, header.keySize},
-                              std::string_view{valBuf, header.valSize});
+    file.read(data.key.ToCString(), header.keySize);
+    file.read(data.value.ToCString(), header.valSize);
 
-    bool isValidRecord = (header.crc == fileCRC);
-    if (isValidRecord) {
-      data.key = std::string_view{keyBuf, header.keySize};
-      data.value = std::string_view{valBuf, header.valSize};
-    }
-    delete[] keyBuf;
-    delete[] valBuf;
-    return isValidRecord;
+    return (header.crc == CalculateCRC32Value());
   }
 
   void FileRecord::DumpToDisk(std::fstream& file) {
-    header.crc = 0;
     header.timestamp = utils::GetMillisecondTimestamp();
     header.keySize = data.key.Length();
     header.valSize = data.value.Length();
-
-    header.crc = utils::FillCRC32Value(
-        header, std::string_view{data.key.ToCString(), data.key.Length()},
-        std::string_view{data.value.ToCString(), data.value.Length()});
+    header.crc = CalculateCRC32Value();
 
     file.write(reinterpret_cast<char*>(&header), sizeof(header));
     file.write(data.key.ToCString(), data.key.Length());

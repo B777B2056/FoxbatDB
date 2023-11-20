@@ -1,5 +1,6 @@
 #include "db.h"
 #include <filesystem>
+#include "common/flags.h"
 #include "errors/protocol.h"
 #include "errors/runtime.h"
 #include "obj.h"
@@ -188,7 +189,7 @@ namespace foxbatdb {
 
   DatabaseManager::DatabaseManager()
       : mIsNonWrite_{false},
-        mDBList_{16} {
+        mDBList_{flags.dbMaxNum} {
     LoadRecordsFromDisk();
   }
 
@@ -210,18 +211,22 @@ namespace foxbatdb {
       Database* db = GetDBByIndex(record.header.dbIdx);
       BinaryString& key = record.data.key;
       BinaryString& val = record.data.value;
-      db->StrSet(record.header.dbIdx, key, val, {});
+
+      if (val.Length())
+        db->StrSet(record.header.dbIdx, key, val, {});
+      else
+        db->Del(key);
     }
     return true;
   }
 
   void DatabaseManager::LoadRecordsFromDisk() {
-    if (!std::filesystem::exists(CLogFileDir) ||
-        !std::filesystem::is_directory(CLogFileDir)) {
+    if (!std::filesystem::exists(flags.dbFileDir) ||
+        !std::filesystem::is_directory(flags.dbFileDir)) {
       return;
     }
     // 获取目标目录下匹配日志文件格式的所有文件
-    std::filesystem::current_path(CLogFileDir);
+    std::filesystem::current_path(flags.dbFileDir);
     for (auto& p : std::filesystem::directory_iterator{"."}) {
       if (!p.exists() || !p.is_regular_file())  continue;
       LoadRecordsFromLogFile(p.path());
@@ -311,17 +316,11 @@ namespace foxbatdb {
       std::uint8_t dbIdx, 
       const BinaryString& key, const BinaryString& val,
       const std::vector<CommandOption>& opts) {
-    std::shared_ptr<ValueObject> obj;
-    if (mEngine_->Contains(key)) {
-      obj = mEngine_->Get(key);
-      obj->UpdateValue(key, val);
-    } else {
-      obj = ValueObject::New(dbIdx, key, val);
-      if (!obj) {
-        // TODO：内存耗尽
-        return std::make_tuple(error::RuntimeErrorCode::kMemoryOut,
-                               std::nullopt);
-      }
+    auto obj = ValueObject::New(dbIdx, key, val);
+    if (!obj) {
+      // TODO：内存耗尽
+      return std::make_tuple(error::RuntimeErrorCode::kMemoryOut,
+                              std::nullopt);
     }
     
     std::optional<BinaryString> data = std::nullopt;
@@ -407,6 +406,7 @@ namespace foxbatdb {
 
   std::error_code Database::Del(const BinaryString& key) {
     NotifyWatchedClientSession(key);
+    mEngine_->Get(key)->DeleteValue(key);
     mEngine_->Del(key);
     return error::RuntimeErrorCode::kSuccess;
   }
