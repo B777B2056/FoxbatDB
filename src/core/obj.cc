@@ -36,6 +36,10 @@ namespace foxbatdb {
   }
 
   std::uint32_t FileRecord::CalculateCRC32Value() const {
+    return CalculateCRC32Value(data.key, data.value);
+  }
+
+  std::uint32_t FileRecord::CalculateCRC32Value(const BinaryString& k, const BinaryString& v) const {
     static bool IsCRC32TableInited = false;
     if (!IsCRC32TableInited) {
       GenerateCRC32Table();
@@ -50,8 +54,6 @@ namespace foxbatdb {
       }
     };
 
-    calcCRC32Once(reinterpret_cast<const char*>(&header.dbIdx),
-                  sizeof(header.dbIdx));
     calcCRC32Once(reinterpret_cast<const char*>(&header.timestamp),
                   sizeof(header.timestamp));
     calcCRC32Once(reinterpret_cast<const char*>(&header.dbIdx),
@@ -60,13 +62,17 @@ namespace foxbatdb {
                   sizeof(header.keySize));
     calcCRC32Once(reinterpret_cast<const char*>(&header.valSize),
                   sizeof(header.valSize));
-    calcCRC32Once(data.key.ToCString(), header.keySize);
-    calcCRC32Once(data.value.ToCString(), header.valSize);
+    calcCRC32Once(k.ToCString(), k.Length());
+    calcCRC32Once(v.ToCString(), v.Length());
 
     return crc ^ 0xFFFFFFFF;
   }
 
-  bool FileRecord::LoadFromDisk(std::fstream& file) {
+  bool FileRecord::LoadFromDisk(std::fstream& file, std::streampos pos) {
+    if (pos < 0)
+      return false;
+
+    file.seekg(pos);
     file.read(reinterpret_cast<char*>(&header), sizeof(header));
 
     if (!ValidateFileRecordHeader(header))
@@ -74,22 +80,28 @@ namespace foxbatdb {
 
     data.key.Resize(header.keySize);
     data.value.Resize(header.valSize);
-
+    
     file.read(data.key.ToCString(), header.keySize);
     file.read(data.value.ToCString(), header.valSize);
 
     return (header.crc == CalculateCRC32Value());
   }
 
-  void FileRecord::DumpToDisk(std::fstream& file) {
+  void FileRecord::DumpToDisk(std::fstream& file, std::uint8_t dbIdx) { 
+    DumpToDisk(file, dbIdx, data.key, data.value);
+  }
+
+  void FileRecord::DumpToDisk(std::fstream& file, std::uint8_t dbIdx, 
+                              const BinaryString& k, const BinaryString& v) {
+    header.dbIdx = dbIdx;
     header.timestamp = utils::GetMillisecondTimestamp();
-    header.keySize = data.key.Length();
-    header.valSize = data.value.Length();
-    header.crc = CalculateCRC32Value();
+    header.keySize = k.Length();
+    header.valSize = v.Length();
+    header.crc = CalculateCRC32Value(k, v);
 
     file.write(reinterpret_cast<char*>(&header), sizeof(header));
-    file.write(data.key.ToCString(), data.key.Length());
-    file.write(data.value.ToCString(), data.value.Length());
+    file.write(k.ToCString(), k.Length());
+    file.write(v.ToCString(), v.Length());
     file.flush();
   }
 
@@ -107,37 +119,70 @@ namespace foxbatdb {
     obj->dbIdx = dbIdx;
     obj->expirationTimeMs = ms;
     obj->createdTime = std::chrono::steady_clock::now();
+    obj->logFilePtr = LogFileManager::GetInstance().GetAvailableLogFile();
     obj->UpdateValue(k, v);
     return obj;
   }
 
-  std::optional<BinaryString> ValueObject::GetValue() {
-    if (-1 == pos)  
-      return {};
-    
-    logFilePtr->seekg(pos);
-    FileRecord record;
-    if (record.LoadFromDisk(*logFilePtr)) {
-      return record.data.value;
+  std::shared_ptr<ValueObject> ValueObject::NewForMerge(std::fstream& file,
+                                                        std::uint8_t dbIdx,
+                                                        const BinaryString& k,
+                                                        const BinaryString& v) {
+    std::shared_ptr<ValueObject> obj{new ValueObject()};
+    obj->dbIdx = dbIdx;
+    obj->expirationTimeMs = std::chrono::milliseconds{ULLONG_MAX};
+    obj->createdTime = std::chrono::steady_clock::now();
+    obj->logFilePtr = &file;
+    obj->UpdateValue(k, v);
+    return obj;
+  }
+
+  std::shared_ptr<ValueObject> ValueObject::NewForHistory(
+      std::fstream& file, std::streampos pos, const FileRecord& record) {
+    std::shared_ptr<ValueObject> obj{new ValueObject()};
+    obj->dbIdx = record.header.dbIdx;
+    obj->expirationTimeMs = std::chrono::milliseconds{ULLONG_MAX};
+    obj->createdTime = utils::TimestampCovertToTimePoint(record.header.timestamp);
+    obj->logFilePtr = &file;
+    obj->pos = pos;
+    return obj;
+  }
+
+  std::optional<BinaryString> ValueObject::GetValue() const {
+    auto record = CovertToFileRecord();
+    if (record.has_value()) {
+      return record->data.value;
     } else {
       return {};
     }
   }
 
   void ValueObject::UpdateValue(const BinaryString& k, const BinaryString& v) {
-    this->logFilePtr = LogFileManager::GetInstance().GetAvailableLogFile();
     // 当前record文件读指针位置为写入数据之前的写指针位置
     this->pos = this->logFilePtr->tellp();  
     // 刷入日志文件（磁盘）
-    FileRecord record;
-    record.header.dbIdx = dbIdx;
-    record.data.key = k;
-    record.data.value = v;
-    record.DumpToDisk(*logFilePtr);
+    FileRecord{}.DumpToDisk(*logFilePtr, this->dbIdx, k, v);
   }
 
   void ValueObject::DeleteValue(const BinaryString& k) {
     UpdateValue(k, {});
+  }
+
+  const std::fstream* ValueObject::GetLogFileHandler() const {
+    return this->logFilePtr;
+  }
+
+  std::optional<FileRecord> ValueObject::CovertToFileRecord() const {
+    FileRecord record;
+    if (record.LoadFromDisk(*logFilePtr, pos)) {
+      return record;
+    } else {
+      return {};
+    }
+  }
+
+  bool ValueObject::IsSameLogFile(const std::fstream& targetFile) const {
+    return &targetFile == logFilePtr;
   }
 
   void ValueObject::SetExpiration(std::chrono::seconds sec) {
@@ -153,6 +198,9 @@ namespace foxbatdb {
   }
 
   bool ValueObject::IsExpired() const {
+    if (expirationTimeMs == std::chrono::milliseconds{ULLONG_MAX}) {
+      return false;
+    }
     auto exTime = createdTime + expirationTimeMs;
     return std::chrono::steady_clock::now() <= exTime;
   }

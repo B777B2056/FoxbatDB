@@ -14,6 +14,15 @@ namespace foxbatdb {
     storage = dict;
   }
 
+  void MaxMemoryPolicyAdapter::Foreach(ForeachCallback callback) {
+    storage->Foreach(
+      [callback](const BinaryString& key, const std::shared_ptr<ValueObject>& val) -> void {
+        if (val)
+          callback(key, *val);
+      }
+    );
+  }
+
   void NoevictionAdapter::RemoveItem() {
     return;
   }

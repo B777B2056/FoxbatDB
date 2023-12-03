@@ -3,6 +3,7 @@
 #include "common/flags.h"
 #include "errors/protocol.h"
 #include "errors/runtime.h"
+#include "filemanager.h"
 #include "obj.h"
 #include "memory.h"
 #include "network/cmd.h"
@@ -187,11 +188,20 @@ namespace foxbatdb {
     return OKResp();
   }
 
+  ProcResult Merge(CMDSessionPtr weak, const Command& cmd) {
+    auto clt = weak.lock();
+    if (!clt) {
+      return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+    }
+
+    auto& fm = LogFileManager::GetInstance();
+    fm.MergeLogFile();
+    return OKResp();
+  }
+
   DatabaseManager::DatabaseManager()
       : mIsNonWrite_{false},
-        mDBList_{flags.dbMaxNum} {
-    LoadRecordsFromDisk();
-  }
+        mDBList_{flags.dbMaxNum} {}
 
   DatabaseManager::~DatabaseManager() {}
 
@@ -200,38 +210,31 @@ namespace foxbatdb {
     return inst;
   }
 
+  void DatabaseManager::Init() {
+
+  }
+
   bool DatabaseManager::LoadRecordsFromLogFile(const std::string& path) {
+    if (!std::filesystem::exists(path)) {
+      return false;
+    }
     std::fstream file{path, std::ios_base::in | std::ios::binary};
     if (!file.is_open()) 
       return false;
     while (!file.eof()) {
       FileRecord record;
-      if (!record.LoadFromDisk(file)) continue;
+      if (!record.LoadFromDisk(file, file.tellg())) continue;
 
       Database* db = GetDBByIndex(record.header.dbIdx);
       BinaryString& key = record.data.key;
       BinaryString& val = record.data.value;
 
       if (val.Length())
-        db->StrSet(record.header.dbIdx, key, val, {});
+        db->StrSet(record.header.dbIdx, key, val);
       else
         db->Del(key);
     }
     return true;
-  }
-
-  void DatabaseManager::LoadRecordsFromDisk() {
-    if (!std::filesystem::exists(flags.dbFileDir) ||
-        !std::filesystem::is_directory(flags.dbFileDir)) {
-      return;
-    }
-    // 获取目标目录下匹配日志文件格式的所有文件
-    std::filesystem::current_path(flags.dbFileDir);
-    for (auto& p : std::filesystem::directory_iterator{"."}) {
-      if (!p.exists() || !p.is_regular_file())  continue;
-      LoadRecordsFromLogFile(p.path());
-    }
-    return;
   }
 
   bool DatabaseManager::HaveMemoryAvailable() const {
@@ -302,6 +305,10 @@ namespace foxbatdb {
     return mEngine_->IsEmpty();
   }
 
+  void Database::Foreach(ForeachCallback callback) { 
+    mEngine_->Foreach(callback);
+  }
+
   void Database::NotifyWatchedClientSession(const BinaryString& key) {
     if (mWatchedMap_.Contains(key)) {
       for (const auto& weak : *(mWatchedMap_.GetRef(key))) {
@@ -311,6 +318,15 @@ namespace foxbatdb {
       }
     }
   }
+  void Database::StrSetForHistoryData(std::fstream& file, std::streampos pos,
+                                      const FileRecord& record) {
+    auto obj = ValueObject::NewForHistory(file, pos, record);
+    if (!obj) {
+      return;
+    }
+    mEngine_->Put(record.data.key, obj);
+  }
+
 
   std::tuple<std::error_code, std::optional<BinaryString>> Database::StrSet(
       std::uint8_t dbIdx, 
@@ -336,6 +352,17 @@ namespace foxbatdb {
     NotifyWatchedClientSession(key);
     mEngine_->Put(key, obj);
     return std::make_tuple(error::ProtocolErrorCode::kSuccess, data);
+  }
+
+  void Database::StrSetForMerge(std::fstream& mergeFile, std::uint8_t dbIdx,
+                                const BinaryString& key,
+                                const BinaryString& val) {
+    auto obj = ValueObject::NewForMerge(mergeFile, dbIdx, key, val);
+    if (!obj) {
+      // TODO：内存耗尽
+      return;
+    }
+    mEngine_->Put(key, obj);
   }
 
   std::tuple<std::error_code, std::optional<BinaryString>>

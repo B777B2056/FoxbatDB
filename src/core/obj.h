@@ -30,14 +30,19 @@ namespace foxbatdb {
     FileRecordData data;
 
     std::uint32_t CalculateCRC32Value() const;
-    bool LoadFromDisk(std::fstream& file);
-    void DumpToDisk(std::fstream& file);
+    std::uint32_t CalculateCRC32Value(const BinaryString& k,
+                                      const BinaryString& v) const;
+    bool LoadFromDisk(std::fstream& file, std::streampos pos);
+    void DumpToDisk(std::fstream& file, std::uint8_t dbIdx);
+    void DumpToDisk(std::fstream& file, std::uint8_t dbIdx,
+                    const BinaryString& k,
+                    const BinaryString& v);
   };
 
   class ValueObject {
    private:
      std::uint8_t dbIdx;
-     std::fstream* logFilePtr;
+     mutable std::fstream* logFilePtr;
      std::fstream::pos_type pos{-1};
      std::chrono::milliseconds expirationTimeMs;
      std::chrono::time_point<std::chrono::steady_clock> createdTime;
@@ -55,9 +60,20 @@ namespace foxbatdb {
                                              const BinaryString& k,
                                              const BinaryString& v,
                                              std::chrono::milliseconds ms);
+     static std::shared_ptr<ValueObject> NewForMerge(std::fstream& file,
+                                                     std::uint8_t dbIdx,
+                                                     const BinaryString& k,
+                                                     const BinaryString& v);
+     static std::shared_ptr<ValueObject> NewForHistory(
+         std::fstream& file, std::streampos pos, const FileRecord& record);
      
-     std::optional<BinaryString> GetValue();
+     std::optional<BinaryString> GetValue() const;
      void DeleteValue(const BinaryString& k);
+
+     const std::fstream* GetLogFileHandler() const;
+     std::optional<FileRecord> CovertToFileRecord() const;
+
+     bool IsSameLogFile(const std::fstream& targetFile) const;
 
      void SetExpiration(std::chrono::seconds sec);
      void SetExpiration(std::chrono::milliseconds ms);

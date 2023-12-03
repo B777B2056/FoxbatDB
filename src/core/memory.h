@@ -16,6 +16,8 @@ namespace foxbatdb {
     virtual ~MaxMemoryPolicyAdapter() = default;
 
     void SetStorage(StorageImpl* dict);
+    void Foreach(ForeachCallback callback);
+
     virtual void RemoveItem() = 0;
     virtual bool IsEmpty() const = 0;
     virtual void Put(const BinaryString& key,

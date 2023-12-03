@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <deque>
+#include <functional>
 #include <string>
 #include <vector>
 #include <tuple>
@@ -44,6 +45,7 @@ namespace foxbatdb {
   ProcResult PublishWithChannel(CMDSessionPtr weak, const Command& cmd);
   ProcResult SubscribeWithChannel(CMDSessionPtr weak, const Command& cmd);
   ProcResult UnSubscribeWithChannel(CMDSessionPtr weak, const Command& cmd);
+  ProcResult Merge(CMDSessionPtr weak, const Command& cmd);
 
   class DatabaseManager {
    private:
@@ -52,11 +54,11 @@ namespace foxbatdb {
     PubSubWithChannel mPubSubChannel_;
 
     DatabaseManager();
-    void LoadRecordsFromDisk();
 
    public:
     ~DatabaseManager();
     static DatabaseManager& GetInstance();
+    void Init();
     bool LoadRecordsFromLogFile(const std::string& path);
     bool HaveMemoryAvailable() const;
     void ScanDBForReleaseMemory();
@@ -91,10 +93,16 @@ namespace foxbatdb {
     void ReleaseMemory();
     bool HaveMemoryAvailable() const;
 
+    void Foreach(ForeachCallback callback);
+
+    void StrSetForHistoryData(std::fstream& file, std::streampos pos,
+                              const FileRecord& record);
     std::tuple<std::error_code, std::optional<BinaryString>> StrSet(
         std::uint8_t dbIdx,
         const BinaryString& key, const BinaryString& val,
-        const std::vector<CommandOption>& opts);
+        const std::vector<CommandOption>& opts = {});
+    void StrSetForMerge(std::fstream& mergeFile, std::uint8_t dbIdx,
+                        const BinaryString& key, const BinaryString& val);
     std::optional<BinaryString> StrGet(const BinaryString& key);
     std::error_code Del(const BinaryString& key);
     void AddWatch(const BinaryString& key, CMDSessionPtr clt);

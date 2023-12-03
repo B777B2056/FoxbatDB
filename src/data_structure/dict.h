@@ -37,5 +37,13 @@ namespace foxbatdb {
         return nullptr;
       return &mHashMap_[key];
     }
+
+    // TODO£ºÎªDictÌí¼Óµü´úÆ÷
+    void Foreach(
+        std::function<void(const BinaryString&, const T&)> callback) { 
+      for (const auto& [key, val] : mHashMap_) {
+        callback(key, val);
+      }
+    }
   };
 }

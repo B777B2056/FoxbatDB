@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <string>
 #include <vector>
 #include <list>
@@ -10,6 +11,7 @@
 namespace foxbatdb {
   class Database;
   class DatabaseManager;
+  class FileRecord;
 
   enum class CmdOptionType : std::uint8_t { kEX = 1, kPX, kNX, kXX, kKEEPTTL, kGET, kTODO };
 
@@ -48,4 +50,10 @@ namespace foxbatdb {
   };
 
   using PubSubChannelMap = Dict<std::list<CMDSessionPtr>>;
+
+  using ForeachCallback = std::function<void(const BinaryString&, const ValueObject&)>;
+}
+
+constexpr unsigned long long operator"" _MB(unsigned long long m) {
+    return m * 1024 * 1024;
 }

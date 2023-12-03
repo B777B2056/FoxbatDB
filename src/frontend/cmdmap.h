@@ -129,6 +129,14 @@ namespace foxbatdb {
             .maxArgc = 15,
         }},
 
+    {"merge",
+        detail::MainCommandWrapper{
+            .call = &Merge,
+            .isWriteCmd = false,
+            .minArgc = 0,
+            .maxArgc = 0,
+        }},
+
     {"command",
       detail::MainCommandWrapper{
           .call = &CommandDB,

@@ -1,24 +1,27 @@
 #pragma once
 #include <fstream>
-#include <vector>
-#include <string_view>
+#include <list>
 
 namespace foxbatdb {
   class LogFileManager {
   private:
     struct LogFileWrapper {
       std::fstream file;
+      std::string name;
     };
 
-    std::vector<LogFileWrapper> mLogFilePool_;
-    std::size_t mAvailableIdx_;
+    std::list<LogFileWrapper> mLogFilePool_;
+    std::list<LogFileWrapper>::iterator mAvailableNode_;
 
-    LogFileManager();
+    LogFileManager() = default;
     void PoolExpand();
+    void LoadHistoryRecordsFromDisk();
 
   public:
-    ~LogFileManager();
+    ~LogFileManager() = default;
     static LogFileManager& GetInstance();
+    void Init();
     std::fstream* GetAvailableLogFile();
+    void MergeLogFile();
   };
 }
