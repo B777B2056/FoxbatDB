@@ -8,8 +8,6 @@
 namespace foxbatdb {
 CMDSession::CMDSession(asio::ip::tcp::socket socket)
   : mSocket_(std::move(socket)) {
-  auto& dbm = DatabaseManager::GetInstance();
-  mDB_ = dbm.GetDBByIndex(0);
   mReadBuffer_.prepare(1024);
 }
 
@@ -17,37 +15,28 @@ void CMDSession::Start() {
   DoRead();
 }
 
-std::tuple<std::uint8_t, Database*> CMDSession::CurrentDB() {
-  return {mDBIdx_, mDB_};
+Database* CMDSession::CurrentDB() {
+  return mExecutor_.CurrentDB();
 }
 
-void CMDSession::SwitchToTargetDB(std::uint8_t dbIdx, Database* db) {
-  mDBIdx_ = dbIdx;
-  mDB_ = db;
+std::uint8_t CMDSession::CurrentDBIdx() const {
+  return mExecutor_.CurrentDBIdx();
+}
+
+void CMDSession::SwitchToTargetDB(std::uint8_t dbIdx) {
+  mExecutor_.SwitchToTargetDB(dbIdx);
 }
 
 void CMDSession::AddWatchKey(const BinaryString& key) {
-  mWatchedKeyList_.emplace_back(key);
+  mExecutor_.AddWatchKey(key);
 }
 
 void CMDSession::DelWatchKey(const BinaryString& key) {
-  mWatchedKeyList_.erase(std::find(mWatchedKeyList_.begin(), mWatchedKeyList_.end(), key));
-}
-
-void CMDSession::ClearWatchKey() {
-  auto self(shared_from_this());
-  for (const auto& key : mWatchedKeyList_) {
-    mDB_->DelWatch(key, weak_from_this());
-  }
-
-  mWatchedKeyList_.clear();
-  mWatchedKeyList_.shrink_to_fit();
+  mExecutor_.DelWatchKey(key);
 }
 
 void CMDSession::SetCurrentTxToFail() {
-  if (mIsInTxMode_) {
-    mIsTxFailed_ = true;
-  }
+  mExecutor_.SetCurrentTxToFail();
 }
 
 void CMDSession::WritePublishMsg(const BinaryString& channel,
@@ -56,6 +45,13 @@ void CMDSession::WritePublishMsg(const BinaryString& channel,
   DoWrite(utils::BuildPubSubResponse(
     std::vector<std::string>{"message", channel.ToTextString(), msg.ToTextString()}));
 }
+
+#ifdef _FOXBATDB_SELF_TEST
+std::string CMDSession::DoExecOneCmd(const ParseResult& result) {
+  auto self(shared_from_this());
+  return mExecutor_.DoExecOneCmd(weak_from_this(), result);
+}
+#endif
 
 void CMDSession::DoRead() {
   auto self(shared_from_this());
@@ -94,49 +90,11 @@ void CMDSession::ProcessMsg(std::size_t length) {
       DoWrite(result.errMsg);
     } else {
       if (mParser_.IsParseFinished()) {
-        DoExecOneCmd(result);
+        DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
       } else {
         DoRead();
       }
     }
-  }
-}
-
-void CMDSession::DoExecOneCmd(const ParseResult& result) {
-  auto self(shared_from_this());
-  switch (result.txState) {
-    case TxState::kBegin:
-      mIsInTxMode_ = true;
-      DoWrite(utils::BuildResponse("OK"));
-      break;
-    case TxState::kExec:
-      mIsInTxMode_ = false;
-      ClearWatchKey();
-      if (mIsTxFailed_) {
-        mIsTxFailed_ = false;
-        mTx_.Discard();
-        DoWrite(utils::BuildErrorResponse(error::RuntimeErrorCode::kWatchedKeyModified));
-      } else {
-        DoWrite(mTx_.Exec(weak_from_this()));
-      }
-      break;
-    case TxState::kDiscard:
-      mIsInTxMode_ = false;
-      ClearWatchKey();
-      mTx_.Discard();
-      DoWrite(utils::BuildResponse("OK"));
-      break;
-    default:
-      if (mIsInTxMode_) {
-        mTx_.PushCommand(result.data);
-        DoWrite(utils::BuildResponse("QUEUED"));
-      } else {
-        DoWrite(RequestParser::Exec(weak_from_this(), result.data));
-      }
-      break;
-  }
-  if (result.isWriteCmd) {
-    Persister::GetInstance().AppendCommand(result.cmdText);
   }
 }
 }  // namespace foxbatdb

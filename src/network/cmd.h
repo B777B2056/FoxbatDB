@@ -1,7 +1,6 @@
 #pragma once
-#include <tuple>
 #include "asio/asio.hpp"
-#include "core/transaction.h"
+#include "frontend/executor.h"
 #include "frontend/parser.h"
 
 namespace foxbatdb {
@@ -19,8 +18,9 @@ class CMDSession : public std::enable_shared_from_this<CMDSession> {
 
   void Start();
 
-  std::tuple<std::uint8_t, Database*> CurrentDB();
-  void SwitchToTargetDB(std::uint8_t dbIdx, Database* db);
+  Database* CurrentDB();
+  std::uint8_t CurrentDBIdx() const;
+  void SwitchToTargetDB(std::uint8_t dbIdx);
 
   void AddWatchKey(const BinaryString& key);
   void DelWatchKey(const BinaryString& key);
@@ -28,23 +28,18 @@ class CMDSession : public std::enable_shared_from_this<CMDSession> {
 
   void WritePublishMsg(const BinaryString& channel, const BinaryString& msg);
 
+#ifdef _FOXBATDB_SELF_TEST
+  std::string DoExecOneCmd(const ParseResult& result);
+#endif
+
 private:
   asio::ip::tcp::socket mSocket_;
   asio::streambuf mReadBuffer_;
   RequestParser mParser_;
-  bool mIsInTxMode_ : 4 = false;
-  bool mIsTxFailed_ : 4 = false;
-  Transaction mTx_;
-  std::vector<BinaryString> mWatchedKeyList_;
-  std::uint8_t mDBIdx_; 
-  Database* mDB_;
+  CMDExecutor mExecutor_;
 
   void DoRead();
   void DoWrite(const std::string& data);
-
   void ProcessMsg(std::size_t length);
-  void DoExecOneCmd(const ParseResult& result);
-
-  void ClearWatchKey();
 };
 }  // namespace foxbatdb

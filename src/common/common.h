@@ -40,7 +40,7 @@ namespace foxbatdb {
   class ValueObject;
   using StorageImpl = Dict<std::shared_ptr<ValueObject>>;
 
-  using WatchedMap = Dict<std::vector<CMDSessionPtr>>;
+  using WatchedKeyMap = Dict<std::vector<CMDSessionPtr>>;
 
   enum class TxState : std::uint8_t {
     kInvalid = 0,

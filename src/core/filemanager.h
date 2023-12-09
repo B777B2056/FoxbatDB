@@ -13,7 +13,7 @@ namespace foxbatdb {
     std::list<LogFileWrapper> mLogFilePool_;
     std::list<LogFileWrapper>::iterator mAvailableNode_;
 
-    LogFileManager() = default;
+    LogFileManager();
     void PoolExpand();
     void LoadHistoryRecordsFromDisk();
 

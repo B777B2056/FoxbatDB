@@ -1,6 +1,7 @@
 #include "filemanager.h"
 #include <regex>
 #include <iterator>
+#include <iostream>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -24,25 +25,20 @@ namespace foxbatdb {
     return BuildLogFileName(std::to_string(idx));
   }
 
-  LogFileManager& LogFileManager::GetInstance() {
-    static LogFileManager instance;
-    return instance;
-  }
+  LogFileManager::LogFileManager() {
+    // 加载历史数据
+    LoadHistoryRecordsFromDisk();
+    if (!mLogFilePool_.empty()) {
+      MergeLogFile();  // 合并历史log文件
+      return;
+    }
 
-  void LogFileManager::Init() {
     // 若文件夹不存在，则创建文件夹
     if (!std::filesystem::exists(flags.dbFileDir) ||
         !std::filesystem::is_directory(flags.dbFileDir)) {
       if (!std::filesystem::create_directory(flags.dbFileDir)) {
         throw std::runtime_error{"log file directory create failed"};
       }
-    }
-
-    // 加载历史数据
-    LoadHistoryRecordsFromDisk();
-    if (!mLogFilePool_.empty()) {
-      MergeLogFile();  // 合并历史log文件
-      return;
     }
 
     // 创建文件
@@ -57,6 +53,15 @@ namespace foxbatdb {
           LogFileWrapper{.file = std::move(file), .name = fileName});
     }
     mAvailableNode_ = mLogFilePool_.begin();
+  }
+
+  LogFileManager& LogFileManager::GetInstance() {
+    static LogFileManager instance;
+    return instance;
+  }
+
+  void LogFileManager::Init() {
+    return;
   }
 
   std::fstream* LogFileManager::GetAvailableLogFile() {
@@ -84,6 +89,8 @@ namespace foxbatdb {
   }
 
   void LogFileManager::LoadHistoryRecordsFromDisk() {
+    if (!std::filesystem::exists(flags.dbFileDir))
+      return;
     auto& dbm = DatabaseManager::GetInstance();
     std::stringstream ss;
     ss << flags.dbFileDir << "/" << CFileNamePrefix
@@ -92,13 +99,14 @@ namespace foxbatdb {
     // 获取目标目录下匹配日志文件格式的所有文件名
     std::vector<std::string> fileNames;
     for (auto& p : std::filesystem::directory_iterator{flags.dbFileDir}) {
-      if (!p.exists() || 
+      if (!p.exists() ||
           !p.is_regular_file() ||
           !std::regex_match(p.path().string(), regexpr))
         continue;
       fileNames.emplace_back(p.path().string());
+      // std::cout << "history file: " << p.path().string() << ", hard link count: " << p.hard_link_count() << std::endl;
     }
-    
+
     // 按文件名字典序填充文件池
     std::sort(fileNames.begin(), fileNames.end());
     for (const auto& fileName : fileNames) {
@@ -166,6 +174,7 @@ namespace foxbatdb {
 
     // 删除原先的只读文件
     for (auto it = mLogFilePool_.begin(); it != savedMergeFileNode; ++it) {
+      it->file.close();
       std::filesystem::remove(it->name);
     }
 

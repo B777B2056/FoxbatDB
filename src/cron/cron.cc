@@ -7,6 +7,8 @@ namespace foxbatdb {
     : mIOContext_{},
       mLogFlushTimer_{mIOContext_} {
     AddJobs();
+    mCronThread_ = std::thread{[this] { mIOContext_.run(); }};
+    Start();
   }
 
   CronJobManager::~CronJobManager() {
@@ -35,7 +37,6 @@ namespace foxbatdb {
   }
 
   void CronJobManager::Init() {
-    mCronThread_ = std::thread{ [this]{ mIOContext_.run(); } };
-    Start();
+    return;
   }
 }

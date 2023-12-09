@@ -79,7 +79,7 @@ namespace foxbatdb {
   private:
     StorageImpl mStorage_;
     MaxMemoryPolicyAdapter* mEngine_;
-    WatchedMap mWatchedMap_;
+    WatchedKeyMap mWatchedMap_;
 
     std::tuple<std::error_code, std::optional<BinaryString>> StrSetWithOption(
       const BinaryString& key, ValueObject& obj, const CommandOption& opt);

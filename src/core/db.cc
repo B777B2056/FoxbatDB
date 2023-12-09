@@ -44,8 +44,7 @@ namespace foxbatdb {
       return MakeProcResult(error::RuntimeErrorCode::kDBIdxOutOfRange);
     }
     if (auto clt = weak.lock(); clt) {
-      clt->SwitchToTargetDB(
-        *idx, DatabaseManager::GetInstance().GetDBByIndex(*idx));
+      clt->SwitchToTargetDB(*idx);
       return OKResp();
     } else {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -81,8 +80,8 @@ namespace foxbatdb {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
-    auto [dbIdx, db] = clt->CurrentDB();
-    auto [err, data] = db->StrSet(dbIdx, key, val, cmd.options);
+    auto* db = clt->CurrentDB();
+    auto [err, data] = db->StrSet(clt->CurrentDBIdx(), key, val, cmd.options);
     if (err) {
       return MakeProcResult(err);
     } else if (data.has_value()) {
@@ -99,7 +98,7 @@ namespace foxbatdb {
     }
 
     auto& key = cmd.argv[0];
-    auto [_, db] = clt->CurrentDB();
+    auto* db = clt->CurrentDB();
     auto val = db->StrGet(key);
     if (!val.has_value()) {
       return MakeProcResult(error::RuntimeErrorCode::kKeyNotFound);
@@ -115,7 +114,7 @@ namespace foxbatdb {
     }
 
     int cnt = 0;
-    auto [_, db] = clt->CurrentDB();
+    auto* db = clt->CurrentDB();
     for (const auto& key : cmd.argv) {
       if (!db->Del(key))
         ++cnt;
@@ -129,7 +128,7 @@ namespace foxbatdb {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
-    auto [_, db] = clt->CurrentDB();
+    auto* db = clt->CurrentDB();
     db->AddWatch(cmd.argv[0], weak);
     return OKResp();
   }
@@ -140,7 +139,7 @@ namespace foxbatdb {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
-    auto [_, db] = clt->CurrentDB();
+    auto* db = clt->CurrentDB();
     db->DelWatch(cmd.argv[0], weak);
     return OKResp();
   }
