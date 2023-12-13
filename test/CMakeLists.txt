@@ -1,5 +1,4 @@
 cmake_minimum_required (VERSION 3.27)
-project ("FoxbatDBTEST" VERSION "0.0.1")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,10 +18,12 @@ find_package(Threads REQUIRED)
 
 enable_testing()
 
+include_directories(".")
+file(GLOB_RECURSE TOOLS_TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.cc")
 file(GLOB_RECURSE FUNCTION_TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/function/*.cc")
-add_executable(foxbatdb_test "main.cc" ${SRC} ${3rd_SRC} ${FUNCTION_TEST_SRC})
 
-target_link_libraries(foxbatdb_test Threads::Threads GTest::gtest_main)
+add_executable(foxbatdb_test "main.cc" ${SRC} ${3rd_SRC} ${TOOLS_TEST_SRC} ${FUNCTION_TEST_SRC})
+target_link_libraries(foxbatdb_test PUBLIC Threads::Threads GTest::gtest_main)
 
 include(GoogleTest)
-gtest_discover_tests(foxbatdb_test)
+gtest_discover_tests(foxbatdb_test DISCOVERY_TIMEOUT 600)

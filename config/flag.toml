@@ -1,0 +1,15 @@
+[startup]
+listenPort = 7698
+databaseNumber = 16
+
+[aof]
+aofCronJobPeriodMs = 3000
+aofLogFilePath = "foxbat.log"
+
+[dbfile]
+dbFileDirectory = "db"
+dbFileMaxSizeMB = 512
+
+[keyval]
+keyMaxBytes = 1024
+valueMaxBytes = 1024

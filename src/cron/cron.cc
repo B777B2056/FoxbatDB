@@ -33,7 +33,7 @@ namespace foxbatdb {
 
   void CronJobManager::Start() {
     mLogFlushTimer_.Start(
-      std::chrono::milliseconds{foxbatdb::flags.logWriteCronJobPeriodMs});
+      std::chrono::milliseconds{Flags::GetInstance().logWriteCronJobPeriodMs});
   }
 
   void CronJobManager::Init() {

@@ -26,8 +26,8 @@ namespace foxbatdb {
 
     enum class CommandParseState : std::uint8_t {
       kMainCommand = 1,
-      kMainArgvOrCommandOption,
-      kOptionArgv
+      kMainArgv,
+      kCommandOption,
     };
 
   private:

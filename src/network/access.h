@@ -13,7 +13,7 @@ class TCPServer {
   TCPServer()
       : mIOContext_{},
         mAcceptor_{mIOContext_, asio::ip::tcp::endpoint(asio::ip::tcp::v4(),
-                                                        foxbatdb::flags.port)} {
+                                                        Flags::GetInstance().port)} {
     this->DoAccept();
   }
 

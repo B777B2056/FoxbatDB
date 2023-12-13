@@ -3,7 +3,7 @@
 
 namespace foxbatdb {
   Persister::Persister()
-    : mFile_{foxbatdb::flags.logFileName,
+    : mFile_{Flags::GetInstance().logFileName,
              std::ios::out | std::ios::app | std::ios::binary} {
     mThread_ = std::jthread{
       [this](std::stop_token stoken) {

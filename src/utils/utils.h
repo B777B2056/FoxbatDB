@@ -4,8 +4,8 @@
 
 namespace foxbatdb {
   namespace utils {
-    std::uint64_t GetMillisecondTimestamp();
-    std::chrono::steady_clock::time_point TimestampCovertToTimePoint(std::uint64_t timestamp);
+    std::uint64_t GetMicrosecondTimestamp();
+    std::chrono::steady_clock::time_point MicrosecondTimestampCovertToTimePoint(std::uint64_t timestamp);
     bool IsValidTimestamp(std::uint64_t timestamp);
   }
 }

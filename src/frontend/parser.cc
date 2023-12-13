@@ -102,34 +102,48 @@ namespace foxbatdb {
           mResult_.isWriteCmd = info.isWriteCmd;
           SetResultTxState(cmdStr);
           // 状态转移
-          mCommandState_ = CommandParseState::kMainArgvOrCommandOption;
+          mCommandState_ = CommandParseState::kMainArgv;
         } else {
           HandleSyntaxError(error::ProtocolErrorCode::kCommandNotFound);
         }
         break;
-      case CommandParseState::kMainArgvOrCommandOption:
-        if (auto cmdOptStr = ToLowerString(param);
-            CommandOptionMap.contains(cmdOptStr)) {
+      case CommandParseState::kMainArgv:
+      {
+        auto cmdOptStr = ToLowerString(param);
+        if (!CommandOptionMap.contains(cmdOptStr)) {
+          // 非命令选项关键字，作为主命令参数保存到解析结果
+          mResult_.data.argv.emplace_back(param);
+        } else {
+          // 命令选项关键字，作为命令选项保存到解析结果，并转移下一状态至命令选项解析状态
           auto optWrapper = CommandOptionMap.at(cmdOptStr);
           if (!optWrapper.matchedMainCommand.contains(mResult_.data.name)) {
             HandleSyntaxError(error::ProtocolErrorCode::kCommandNotFound);
           } else {
             // 保存命令选项到解析结果
-            CommandOption opt;
-            opt.name = cmdOptStr;
-            opt.type = optWrapper.type;
-            mResult_.data.options.push_back(opt);
+            mResult_.data.options.push_back(CommandOption{.name=cmdOptStr, .type=optWrapper.type});
             // 状态转移
-            mCommandState_ = CommandParseState::kOptionArgv;
+            mCommandState_ = CommandParseState::kCommandOption;
           }
-        } else {
-          // 保存主命令参数到解析结果
-          mResult_.data.argv.emplace_back(param);
         }
+      }
         break;
-      case CommandParseState::kOptionArgv:
-        // 保存命令选项参数到解析结果
-        mResult_.data.options.back().argv.emplace_back(param);
+      case CommandParseState::kCommandOption:
+      {
+        auto cmdOptStr = ToLowerString(param);
+        if (!CommandOptionMap.contains(cmdOptStr)) {
+          // 非命令选项关键字，作为命令选项参数保存到解析结果
+          mResult_.data.options.back().argv.emplace_back(param);
+        } else {
+          // 命令选项关键字，作为命令选项保存到解析结果，并转移下一状态至命令选项解析状态
+          auto optWrapper = CommandOptionMap.at(cmdOptStr);
+          if (!optWrapper.matchedMainCommand.contains(mResult_.data.name)) {
+            HandleSyntaxError(error::ProtocolErrorCode::kCommandNotFound);
+          } else {
+            // 保存命令选项到解析结果
+            mResult_.data.options.push_back(CommandOption{.name=cmdOptStr, .type=optWrapper.type});
+          }
+        }
+      }
         break;
       default:
         break;
@@ -139,15 +153,25 @@ namespace foxbatdb {
   void RequestParser::ValidateCommand() {
     if (mSyntaxError_)  return;
     // 校验主命令参数数量是否正确
-    auto mainCmdWrapper = MainCommandMap.at(mResult_.data.name);
+    auto& mainCmdWrapper = MainCommandMap.at(mResult_.data.name);
     if ((mResult_.data.argv.size() < mainCmdWrapper.minArgc) ||
         (mResult_.data.argv.size() > mainCmdWrapper.maxArgc)) {
       HandleSyntaxError(error::ProtocolErrorCode::kArgNumbers);
       return;
     }
-    // 校验主命令选项参数数量是否正确
-    for (const auto& opt : mResult_.data.options) {
+    // 校验主命令选项参数
+    auto& opts = mResult_.data.options;
+    for (const auto& opt : opts) {
       auto& cmdOptWrapper = CommandOptionMap.at(opt.name);
+      // 校验主命令选项参数是否存在互斥
+      for (auto optType : cmdOptWrapper.exclusiveOpts) {
+        if (opts.end() != std::find_if(opts.begin(), opts.end(), 
+          [optType](const CommandOption& o){return o.type == optType;})) {
+          HandleSyntaxError(error::ProtocolErrorCode::kOptionExclusive);
+          return;
+        }
+      }
+      // 校验主命令选项参数数量是否正确
       if ((opt.argv.size() < cmdOptWrapper.minArgc) ||
         (opt.argv.size() > cmdOptWrapper.maxArgc)) {
         HandleSyntaxError(error::ProtocolErrorCode::kArgNumbers);

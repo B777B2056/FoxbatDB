@@ -1,7 +1,6 @@
 #include "filemanager.h"
 #include <regex>
 #include <iterator>
-#include <iostream>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -17,7 +16,7 @@ namespace foxbatdb {
   static constexpr std::string_view CFileNameSuffix = ".db";
 
   static std::string BuildLogFileName(const std::string& content) {
-    return flags.dbFileDir + "/" + std::string{CFileNamePrefix} +
+    return Flags::GetInstance().dbFileDir + "/" + std::string{CFileNamePrefix} +
            content + std::string{CFileNameSuffix};
   }
 
@@ -27,16 +26,18 @@ namespace foxbatdb {
 
   LogFileManager::LogFileManager() {
     // 加载历史数据
-    LoadHistoryRecordsFromDisk();
-    if (!mLogFilePool_.empty()) {
-      MergeLogFile();  // 合并历史log文件
-      return;
+    if (std::filesystem::exists(Flags::GetInstance().dbFileDir)) {
+      LoadHistoryRecordsFromDisk();
+      if (!mLogFilePool_.empty()) {
+        MergeLogFile();  // 合并历史log文件
+        return;
+      }
     }
 
     // 若文件夹不存在，则创建文件夹
-    if (!std::filesystem::exists(flags.dbFileDir) ||
-        !std::filesystem::is_directory(flags.dbFileDir)) {
-      if (!std::filesystem::create_directory(flags.dbFileDir)) {
+    if (!std::filesystem::exists(Flags::GetInstance().dbFileDir) ||
+        !std::filesystem::is_directory(Flags::GetInstance().dbFileDir)) {
+      if (!std::filesystem::create_directory(Flags::GetInstance().dbFileDir)) {
         throw std::runtime_error{"log file directory create failed"};
       }
     }
@@ -65,7 +66,7 @@ namespace foxbatdb {
   }
 
   std::fstream* LogFileManager::GetAvailableLogFile() {
-    if (std::filesystem::file_size(mAvailableNode_->name) > flags.dbFileMaxSize) {
+    if (std::filesystem::file_size(mAvailableNode_->name) > Flags::GetInstance().dbFileMaxSize) {
       if (std::next(mAvailableNode_, 1) == mLogFilePool_.end()) {
         PoolExpand();
       }
@@ -89,22 +90,20 @@ namespace foxbatdb {
   }
 
   void LogFileManager::LoadHistoryRecordsFromDisk() {
-    if (!std::filesystem::exists(flags.dbFileDir))
-      return;
     auto& dbm = DatabaseManager::GetInstance();
     std::stringstream ss;
-    ss << flags.dbFileDir << "/" << CFileNamePrefix
+    ss << Flags::GetInstance().dbFileDir << "/" << CFileNamePrefix
        << "[[:digit:]]+\\" << CFileNameSuffix;
     std::regex regexpr{ss.str()};
     // 获取目标目录下匹配日志文件格式的所有文件名
     std::vector<std::string> fileNames;
-    for (auto& p : std::filesystem::directory_iterator{flags.dbFileDir}) {
+    for (auto& p : std::filesystem::directory_iterator{Flags::GetInstance().dbFileDir}) {
       if (!p.exists() ||
           !p.is_regular_file() ||
+          !p.file_size() ||
           !std::regex_match(p.path().string(), regexpr))
         continue;
       fileNames.emplace_back(p.path().string());
-      // std::cout << "history file: " << p.path().string() << ", hard link count: " << p.hard_link_count() << std::endl;
     }
 
     // 按文件名字典序填充文件池

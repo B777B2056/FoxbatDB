@@ -19,6 +19,9 @@ namespace foxbatdb {
         case ProtocolErrorCode::kRequestFormat:
           return "Request format error";
 
+        case ProtocolErrorCode::kOptionExclusive:
+          return "Input option has another exclusive option(s)";
+
         default:
           return "Wrong Protocol Error Code";
       }

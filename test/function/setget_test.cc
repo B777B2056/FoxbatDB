@@ -1,82 +1,113 @@
 #include <algorithm>
 #include <chrono>
-#include <iostream>
-#include <unordered_map>
 #include <string>
 #include <thread>
 #include <random>
 #include <gtest/gtest.h>
-#include "core/db.h"
-#include "frontend/cmdmap.h"
-#include "frontend/parser.h"
-#include "network/cmd.h"
+#include "common/common.h"
+#include "errors/runtime.h"
+#include "utils/resp.h"
+#include "tools/tools.h"
 
 using namespace foxbatdb;
+using namespace std::chrono_literals;
+using CMDServerPtr = std::shared_ptr<foxbatdb::CMDSession>;
 
-std::unordered_map<std::string, std::string> testData;
-
-std::shared_ptr<CMDSession> GetMockCMDSession() {
-  static asio::io_context ioContext;
-  return std::make_shared<CMDSession>(asio::ip::tcp::socket{ioContext});
+static void InsertIntoDBWithNoOption(CMDServerPtr cmdSession, const std::string& key, const std::string& val) {
+  static auto expectResp = utils::BuildResponse("OK");
+  auto cmd = ::BuildCMD("set", {key, val});
+  EXPECT_EQ(cmdSession->DoExecOneCmd(cmd), expectResp);
 }
 
-ParseResult BuildCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
-  ParseResult cmd {
-    .hasError=false,
-    .isWriteCmd=MainCommandMap.at(cmdName).isWriteCmd,
-    .txState=TxState::kInvalid,
-    .data = Command{
-      .name=cmdName,
-      .call=MainCommandMap.at(cmdName).call,
-    }
+static void InsertIntoDBWithExOption(CMDServerPtr cmdSession, const std::string& key, const std::string& val, 
+                                     std::uint64_t timeoutMS) {
+  static auto expectResp = utils::BuildResponse("OK");
+  foxbatdb::CommandOption opt{
+    .name="ex",
+    .type=CmdOptionType::kEX,
   };
-  for (const auto& param : argv) {
-    cmd.data.argv.emplace_back(BinaryString{param});
-  }
-  return cmd;
+  opt.argv.emplace_back(std::to_string(timeoutMS));
+  auto cmd = ::BuildCMD("set", {key, val}, {opt});
+  EXPECT_EQ(cmdSession->DoExecOneCmd(cmd), expectResp);
 }
 
-std::string GenRandomString(std::size_t length) {
-  auto randchar = []() -> char {
-      const char charset[] =
-      "0123456789"
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      "abcdefghijklmnopqrstuvwxyz";
-      const size_t max_index = (sizeof(charset) - 1);
-      return charset[std::rand()%max_index];
-  };
-  std::string str(length,0);
-  std::generate_n(str.begin(), length, randchar);
-  return str;
+static void ReadAndTestFromDB(CMDServerPtr cmdSession, const std::string& key, const std::string& val) {
+  auto cmd = ::BuildCMD("get", {key});
+  EXPECT_EQ(cmdSession->DoExecOneCmd(cmd), utils::BuildResponse(val)) << "key: " << key;
 }
 
-void FillTestData() {
-  static constexpr std::size_t singleStringMaxLength = 128;
-  static constexpr std::size_t testDataSize = 64;
-  while (testData.size() < testDataSize) {
-    std::size_t keyLength = 1 + std::rand()%singleStringMaxLength;
-    std::size_t valLength = 1 + std::rand()%singleStringMaxLength;
-    testData[GenRandomString(keyLength)] = GenRandomString(valLength);
-  }
+static void ReadAndTestNotExistFromDB(CMDServerPtr cmdSession, const std::string& key) {
+  auto cmd = ::BuildCMD("get", {key});
+  auto ec = error::make_error_code(error::RuntimeErrorCode::kKeyNotFound);
+  EXPECT_EQ(cmdSession->DoExecOneCmd(cmd), utils::BuildErrorResponse(ec)) << "key: " << key;
 }
 
 TEST(SetGetTest, WithNoOption) {
-  if (testData.empty())
-    FillTestData();
-  std::cout << "test data number: " << testData.size() << std::endl;
-  auto cmdSession = GetMockCMDSession();
+  TestDataset dataset{1024, 64};
+  auto cmdSession = ::GetMockCMDSession();
   // 注入kv存储引擎
-  for (const auto& [key, val] : testData) {
-    ParseResult cmd = BuildCMD("set", {key, val});
-    auto resp = cmdSession->DoExecOneCmd(cmd);
-    EXPECT_EQ(resp, utils::BuildResponse("OK"));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  }
-  // 从kv存储引擎读取数据
-  for (const auto& [key, val] : testData) {
-    ParseResult cmd = BuildCMD("get", {key});
-    auto resp = cmdSession->DoExecOneCmd(cmd);
-    EXPECT_EQ(resp, utils::BuildResponse(val));
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  }
+  dataset.Foreach(
+    [cmdSession](const std::string& key, const std::string& val)->void {
+      InsertIntoDBWithNoOption(cmdSession, key, val);
+    }
+  );
+  // 从kv存储引擎读取并测试数据
+  dataset.Foreach(
+    [cmdSession](const std::string& key, const std::string& val)->void {
+        ReadAndTestFromDB(cmdSession, key, val);
+      }
+  );   
+}
+
+TEST(SetGetTest, WithExOptionNotTimeout) {
+  TestDataset dataset{1024, 64};
+  auto cmdSession = ::GetMockCMDSession();
+  auto exTime = 1000min; // 超时时间为1000分钟
+  // 注入kv存储引擎
+  int i = 0;
+  dataset.Foreach(
+    [cmdSession, &i, exTime](const std::string& key, const std::string& val)->void {
+      if (i % 2 == 0)
+        InsertIntoDBWithExOption(cmdSession, key, val, exTime.count());  
+      else
+        InsertIntoDBWithNoOption(cmdSession, key, val);
+      ++i;
+    }
+  );
+  // 从kv存储引擎读取并测试数据
+  dataset.Foreach(
+    [cmdSession](const std::string& key, const std::string& val)->void {
+      ReadAndTestFromDB(cmdSession, key, val);
+    }
+  );        
+}
+
+TEST(SetGetTest, WithExOptionTimeout) {
+  TestDataset dataset{1024, 64};
+  auto cmdSession = ::GetMockCMDSession();
+  auto exTime = 1min; // 超时时间为1分钟
+  // 注入kv存储引擎
+  int i = 0;
+  dataset.Foreach(
+    [cmdSession, &i, exTime](const std::string& key, const std::string& val)->void {
+      if (i % 2 == 0)
+        InsertIntoDBWithExOption(cmdSession, key, val, exTime.count());  
+      else
+        InsertIntoDBWithNoOption(cmdSession, key, val);
+      ++i;
+    }
+  );
+  // 等待key超时
+  std::this_thread::sleep_for(1min);
+  // 从kv存储引擎读取并测试数据
+  i = 0;
+  dataset.Foreach(
+    [cmdSession, &i](const std::string& key, const std::string& val)->void {
+        if (i % 2 == 0)
+          ReadAndTestNotExistFromDB(cmdSession, key);
+        else
+          ReadAndTestFromDB(cmdSession, key, val);
+        ++i;
+    }
+  );     
 }

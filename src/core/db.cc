@@ -100,7 +100,7 @@ namespace foxbatdb {
     auto& key = cmd.argv[0];
     auto* db = clt->CurrentDB();
     auto val = db->StrGet(key);
-    if (!val.has_value()) {
+    if (!val.has_value() || val->IsEmpty()) {
       return MakeProcResult(error::RuntimeErrorCode::kKeyNotFound);
     }
 
@@ -200,7 +200,7 @@ namespace foxbatdb {
 
   DatabaseManager::DatabaseManager()
       : mIsNonWrite_{false},
-        mDBList_{flags.dbMaxNum} {}
+        mDBList_{Flags::GetInstance().dbMaxNum} {}
 
   DatabaseManager::~DatabaseManager() {}
 
@@ -325,7 +325,6 @@ namespace foxbatdb {
     }
     mEngine_->Put(record.data.key, obj);
   }
-
 
   std::tuple<std::error_code, std::optional<BinaryString>> Database::StrSet(
       std::uint8_t dbIdx, 

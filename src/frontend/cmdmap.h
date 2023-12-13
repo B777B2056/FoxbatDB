@@ -3,7 +3,6 @@
 #include <climits>
 #include <unordered_set>
 #include <unordered_map>
-#include "utils/ctmap.h"
 
 namespace foxbatdb {
   namespace detail {
@@ -17,6 +16,7 @@ namespace foxbatdb {
     struct CommandOptionWrapper {
       CmdOptionType type;
       std::unordered_set<std::string> matchedMainCommand;
+      std::vector<CmdOptionType> exclusiveOpts;
       std::uint8_t minArgc : 4;
       std::uint8_t maxArgc : 4;
     };
@@ -167,30 +167,35 @@ namespace foxbatdb {
           {"ex", 
             detail::CommandOptionWrapper{.type = CmdOptionType::kEX,
                                          .matchedMainCommand = {"set"},
+                                         .exclusiveOpts = {CmdOptionType::kPX, CmdOptionType::kKEEPTTL},
                                          .minArgc = 1,
                                          .maxArgc = 1}},
 
           {"px", 
             detail::CommandOptionWrapper{.type = CmdOptionType::kPX,
                                          .matchedMainCommand = {"set"},
+                                         .exclusiveOpts = {CmdOptionType::kEX, CmdOptionType::kKEEPTTL},
                                          .minArgc = 1,
                                          .maxArgc = 1}},
 
           {"nx", 
             detail::CommandOptionWrapper{.type = CmdOptionType::kNX,
                                          .matchedMainCommand = {"set"},
+                                         .exclusiveOpts = {CmdOptionType::kXX},
                                          .minArgc = 0,
                                          .maxArgc = 0}},
 
           {"xx", 
             detail::CommandOptionWrapper{.type = CmdOptionType::kXX,
                                          .matchedMainCommand = {"set"},
+                                         .exclusiveOpts = {CmdOptionType::kNX},
                                          .minArgc = 0,
                                          .maxArgc = 0}},
 
           {"keepttl", 
             detail::CommandOptionWrapper{.type = CmdOptionType::kKEEPTTL,
                                          .matchedMainCommand = {"set"},
+                                         .exclusiveOpts = {CmdOptionType::kEX, CmdOptionType::kPX},
                                          .minArgc = 0,
                                          .maxArgc = 0}},
 

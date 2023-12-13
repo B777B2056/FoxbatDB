@@ -9,13 +9,13 @@ namespace foxbatdb {
     if (!utils::IsValidTimestamp(header.timestamp))
       return false;
 
-    if (header.dbIdx > flags.dbMaxNum)
+    if (header.dbIdx > Flags::GetInstance().dbMaxNum)
       return false;
 
-    if (header.keySize > flags.keyMaxBytes)
+    if (header.keySize > Flags::GetInstance().keyMaxBytes)
       return false;
 
-    if (header.valSize > flags.valMaxBytes)
+    if (header.valSize > Flags::GetInstance().valMaxBytes)
       return false;
 
     return true;
@@ -94,7 +94,7 @@ namespace foxbatdb {
   void FileRecord::DumpToDisk(std::fstream& file, std::uint8_t dbIdx, 
                               const BinaryString& k, const BinaryString& v) {
     header.dbIdx = dbIdx;
-    header.timestamp = utils::GetMillisecondTimestamp();
+    header.timestamp = utils::GetMicrosecondTimestamp();
     header.keySize = k.Length();
     header.valSize = v.Length();
     header.crc = CalculateCRC32Value(k, v);
@@ -142,7 +142,7 @@ namespace foxbatdb {
     std::shared_ptr<ValueObject> obj{new ValueObject()};
     obj->dbIdx = record.header.dbIdx;
     obj->expirationTimeMs = std::chrono::milliseconds{ULLONG_MAX};
-    obj->createdTime = utils::TimestampCovertToTimePoint(record.header.timestamp);
+    obj->createdTime = utils::MicrosecondTimestampCovertToTimePoint(record.header.timestamp);
     obj->logFilePtr = &file;
     obj->pos = pos;
     return obj;
@@ -202,6 +202,6 @@ namespace foxbatdb {
       return false;
     }
     auto exTime = createdTime + expirationTimeMs;
-    return std::chrono::steady_clock::now() <= exTime;
+    return std::chrono::steady_clock::now() >= exTime;
   }
 }

@@ -8,6 +8,8 @@
 
 using namespace foxbatdb;
 
+static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
+
 void OutOfMemoryHandler() {
   // 所有DB进入不允许写入状态，只响应非写入命令
   DatabaseManager::GetInstance().SetNonWrite();
@@ -22,16 +24,16 @@ void MemoryAllocRetryFunc() {
   }
 }
 
-void InitComponents(int argc, char** argv) {
-  ParseFlags(argc, argv);  // 初始化运行参数
+void InitComponents() {
   std::set_new_handler(MemoryAllocRetryFunc);
-  DatabaseManager::GetInstance().Init();
-  LogFileManager::GetInstance().Init();
-  CronJobManager::GetInstance().Init();
+  foxbatdb::Flags::GetInstance().Init(flagConfPath);
+  foxbatdb::DatabaseManager::GetInstance().Init();
+  foxbatdb::LogFileManager::GetInstance().Init();
+  foxbatdb::CronJobManager::GetInstance().Init();
 }
 
 int main(int argc, char **argv) {
-  InitComponents(1, &argv[0]);
+  InitComponents();
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

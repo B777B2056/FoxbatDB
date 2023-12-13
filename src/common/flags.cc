@@ -1,42 +1,37 @@
 #include "flags.h"
-#include "cmdline/cmdline.h"
-#include "common/common.h"
+#include "toml++/toml.hpp"
 
 namespace foxbatdb {
-  Flags flags;
-
-  static void PreprocessFlags() {
-    if (flags.dbFileDir.back() == '/') {
-      flags.dbFileDir.pop_back();
-    } 
+  Flags& Flags::GetInstance() {
+    static Flags instance;
+    return instance;
   }
 
-  void ParseFlags(int argc, char** argv) {
-    cmdline::parser parser;
-    parser.add<std::uint16_t>("port", 'p', "port number", false, 7698,
-                              cmdline::range(1, 65535));
-    parser.add<std::int64_t>("log-write-cron-job-period-ms", 't',
-                             "log write cron job period ms", false, 3000,
-                             cmdline::range(0, 10 * 60 * 1000));
-    parser.add<std::string>("log-file-name", 'f', "log file name", false, "foxbat.log");
-    parser.add<std::string>("db-file-dir", 'd', "db file dir", false, "db");
-    parser.add<std::uint8_t>("db-max-num", 'n', "db max num", false, 16, cmdline::range(1, 64));
-    parser.add<std::uint64_t>("db-file-maxsize-mb", 'r', "db file maxsize mb", false, 512_MB);
-    parser.add<std::uint32_t>("key-max-bytes", 'k', "key max bytes", false, 1024);
-    parser.add<std::uint32_t>("val-max-bytes", 'v', "val max bytes", false, 1024);
-    parser.parse_check(argc, argv);
+  void Flags::Init(const std::string& tomlFilePath) {
+    LoadFromConf(tomlFilePath);
+    Preprocess();
+  }
 
-    flags.port = parser.get<std::uint16_t>("port");
-    flags.logWriteCronJobPeriodMs =
-        parser.get<std::int64_t>("log-write-cron-job-period-ms");
-    flags.logFileName = parser.get<std::string>("log-file-name");
-    flags.dbFileDir = parser.get<std::string>("db-file-dir");
-    flags.dbMaxNum = parser.get<std::uint8_t>("db-max-num");
-    flags.dbFileMaxSize =
-        parser.get<std::uint64_t>("db-file-maxsize-mb");
-    flags.keyMaxBytes = parser.get<std::uint32_t>("key-max-bytes");
-    flags.valMaxBytes = parser.get<std::uint32_t>("val-max-bytes");
+  void Flags::LoadFromConf(const std::string& tomlFilePath) {
+    auto tbl = toml::parse_file(tomlFilePath);
 
-    PreprocessFlags();
+    this->port = tbl["startup"]["listenPort"].value<std::uint16_t>().value();
+    this->dbMaxNum = tbl["startup"]["databaseNumber"].value<std::uint8_t>().value();
+
+    this->logWriteCronJobPeriodMs = tbl["aof"]["aofCronJobPeriodMs"].value<std::int64_t>().value();
+    this->logFileName = tbl["aof"]["aofLogFilePath"].value<std::string>().value();
+
+    this->dbFileDir = tbl["dbfile"]["dbFileDirectory"].value<std::string>().value();
+    this->dbFileMaxSize = tbl["dbfile"]["dbFileMaxSizeMB"].value<std::uint64_t>().value();
+
+    this->keyMaxBytes = tbl["keyval"]["keyMaxBytes"].value<std::uint32_t>().value();
+    this->valMaxBytes = tbl["keyval"]["valueMaxBytes"].value<std::uint32_t>().value();
+  }
+
+  void Flags::Preprocess() {
+    if (dbFileDir.back() == '/') {
+      dbFileDir.pop_back();
+    } 
+    dbFileMaxSize = dbFileMaxSize * 1024 * 1024;
   }
 }

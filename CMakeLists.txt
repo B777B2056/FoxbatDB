@@ -13,12 +13,12 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/third")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/third/asio")
 
+find_package(Threads REQUIRED)
+
 file(GLOB_RECURSE SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
 file(GLOB_RECURSE 3rd_SRC "${CMAKE_CURRENT_SOURCE_DIR}/third/*.cc" "${CMAKE_CURRENT_SOURCE_DIR}/third/*.cpp")
 
+add_executable(${PROJECT_NAME} "main.cc" ${SRC} ${3rd_SRC})
+target_link_libraries(${PROJECT_NAME} PUBLIC Threads::Threads)
+
 add_subdirectory("test")
-
-add_executable (FoxbatDB "main.cc" ${SRC} ${3rd_SRC})
-
-find_package(Threads REQUIRED)
-target_link_libraries(FoxbatDB PUBLIC Threads::Threads)

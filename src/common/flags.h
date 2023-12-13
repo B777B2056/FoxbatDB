@@ -12,9 +12,14 @@ namespace foxbatdb {
     std::uint64_t dbFileMaxSize;
     std::uint32_t keyMaxBytes;
     std::uint32_t valMaxBytes;
+
+    ~Flags() = default;
+    static Flags& GetInstance();
+    void Init(const std::string& tomlFilePath);
+
+  private:
+    Flags() = default;
+    void LoadFromConf(const std::string& tomlFilePath);
+    void Preprocess();
   };
-
-  extern Flags flags;
-
-  void ParseFlags(int argc, char** argv);
 }
