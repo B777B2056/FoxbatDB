@@ -1,6 +1,7 @@
 #include "filemanager.h"
 #include <regex>
 #include <iterator>
+#include <iostream>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -29,7 +30,6 @@ namespace foxbatdb {
     if (std::filesystem::exists(Flags::GetInstance().dbFileDir)) {
       LoadHistoryRecordsFromDisk();
       if (!mLogFilePool_.empty()) {
-        MergeLogFile();  // 合并历史log文件
         return;
       }
     }
@@ -48,7 +48,7 @@ namespace foxbatdb {
       std::fstream file{fileName, std::ios::in | std::ios::out |
                                       std::ios::binary | std::ios::app};
       if (!file.is_open()) {
-        throw std::runtime_error{"log file create failed"};
+        throw std::runtime_error{ std::string{"log file create failed: "} + ::strerror(errno) };
       }
       mLogFilePool_.emplace_back(
           LogFileWrapper{.file = std::move(file), .name = fileName});
@@ -67,10 +67,10 @@ namespace foxbatdb {
 
   std::fstream* LogFileManager::GetAvailableLogFile() {
     if (std::filesystem::file_size(mAvailableNode_->name) > Flags::GetInstance().dbFileMaxSize) {
-      if (std::next(mAvailableNode_, 1) == mLogFilePool_.end()) {
+      if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
         PoolExpand();
-      }
-      ++mAvailableNode_;
+      if (std::next(mAvailableNode_, 1) != mLogFilePool_.end())
+        ++mAvailableNode_;
     }
     return &mAvailableNode_->file;
   }
@@ -81,8 +81,10 @@ namespace foxbatdb {
       auto fileName = BuildLogFileNameByIdx(i);
       std::fstream file{fileName, std::ios::in | std::ios::out |
                                       std::ios::binary | std::ios::app};
-      if (!file.is_open())
+      if (!file.is_open()) {
+        std::cerr << "DB file open failed: " << ::strerror(errno);
         continue;
+      }
 
       mLogFilePool_.emplace_back(
           LogFileWrapper{.file = std::move(file), .name = fileName});
@@ -111,7 +113,10 @@ namespace foxbatdb {
     for (const auto& fileName : fileNames) {
         std::fstream file{fileName, std::ios::in | std::ios::out |
                                         std::ios::binary | std::ios::app};
-        if (!file.is_open()) continue;
+        if (!file.is_open()) {
+          std::cerr << "DB file open failed: " << ::strerror(errno);
+          continue; 
+        }
         mLogFilePool_.emplace_back(
             LogFileWrapper{.file = std::move(file), .name = fileName});
     }
@@ -135,21 +140,21 @@ namespace foxbatdb {
     mAvailableNode_ = std::prev(mLogFilePool_.end());
   }
 
-  void LogFileManager::MergeLogFile() {
+  void LogFileManager::Merge() {
     // 记录当前活跃的文件索引
     auto currentAvailableNode = mAvailableNode_;
 
     // 创建merge文件
     auto mergeFileName = BuildLogFileName("merge");
     std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
-                                              std::ios::binary |
-                                              std::ios::app};
-    if (!mergeFile.is_open()) 
+                                              std::ios::binary | std::ios::app};
+    if (!mergeFile.is_open()) {
+      std::cerr << "DB merge file open failed: " << ::strerror(errno);
       return;
+    }
 
     auto savedMergeFileNode = mLogFilePool_.insert(currentAvailableNode,
         LogFileWrapper{.file = std::move(mergeFile), .name = mergeFileName});
-    auto& savedMergeFile = savedMergeFileNode->file;
 
     // 合并db文件
     auto& dbm = DatabaseManager::GetInstance();
@@ -161,12 +166,9 @@ namespace foxbatdb {
             // 不合并当前正可用的db文件
             if (valObj.IsSameLogFile(savedMergeFileNode->file)) 
               return;
-            // 读取到内存中
-            auto record = valObj.CovertToFileRecord();
-            if (!record.has_value()) 
-              return;
-            // 将活跃的key和记录写入merge文件内后，更新内存哈希表
-            db->StrSetForMerge(savedMergeFile, i, key, record->data.value);
+            // 读取到内存中，将活跃的key和记录写入merge文件内后，更新内存哈希表
+            if (auto record = valObj.CovertToFileRecord(); record.has_value()) 
+              db->StrSetForMerge(savedMergeFileNode->file, i, key, record->data.value);
         }
       );
     }

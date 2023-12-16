@@ -3,13 +3,26 @@
 #include <random>
 #include <system_error>
 #include "common/common.h"
-#include "utils/utils.h"
 #include "frontend/cmdmap.h"
 #include "frontend/parser.h"
 
 std::shared_ptr<foxbatdb::CMDSession> GetMockCMDSession() {
   static asio::io_context ioContext;
   return std::make_shared<foxbatdb::CMDSession>(asio::ip::tcp::socket{ioContext});
+}
+
+std::string GenRandomString(std::size_t length) {
+  auto randchar = []() -> char {
+      const char charset[] =
+      "0123456789"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+      const size_t max_index = (sizeof(charset) - 1);
+      return charset[std::rand()%max_index];
+  };
+  std::string str(length,0);
+  std::generate_n(str.begin(), length, randchar);
+  return str;
 }
 
 foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
@@ -48,7 +61,7 @@ foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std
 
 static constexpr const char* TempDatasetFile = "tmp.data";
 
-TestDataset::TestDataset(std::size_t datasetSize, std::size_t singleStringMaxLength) 
+TestDataset::TestDataset(std::size_t datasetSize, std::size_t singleStringMaxLength, std::function<std::string()> keyGenerator) 
   : mDatasetSize_{datasetSize}
   , mSingleStringMaxLength_{singleStringMaxLength}
   , mDataFile_{TempDatasetFile, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc} {
@@ -56,12 +69,12 @@ TestDataset::TestDataset(std::size_t datasetSize, std::size_t singleStringMaxLen
     throw std::runtime_error("temp data file open failed");
   }
   for (std::size_t i = 0; i < mDatasetSize_; ++i) {
-    auto timestamp = std::to_string(foxbatdb::utils::GetMicrosecondTimestamp());
+    auto key = keyGenerator();
     TestDataset::RecordHeader header {
-      .keySize = timestamp.size(),
+      .keySize = key.size(),
       .valSize = 1 + std::rand()%mSingleStringMaxLength_
     };
-    WriteToFile(header, timestamp, GenRandomString(header.valSize));
+    WriteToFile(header, key, GenRandomString(header.valSize));
   }
   mDataFile_.seekg(0);
 }
@@ -85,22 +98,22 @@ void TestDataset::Foreach(std::function<void(const std::string&, const std::stri
   }
 }
 
-std::string TestDataset::GenRandomString(std::size_t length) {
-  auto randchar = []() -> char {
-      const char charset[] =
-      "0123456789"
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      "abcdefghijklmnopqrstuvwxyz";
-      const size_t max_index = (sizeof(charset) - 1);
-      return charset[std::rand()%max_index];
-  };
-  std::string str(length,0);
-  std::generate_n(str.begin(), length, randchar);
-  return str;
+void TestDataset::ForeachWithDuplicatedKey(std::function<void(const std::string&, const std::string&)> cb) {
+  mDataFile_.clear();
+  mDataFile_.seekg(0);
+
+  for (std::size_t i = 0; i < mDatasetSize_; ++i) {
+    std::string key, val;
+    ReadFromFile(key, val);
+    mDataFile_.seekg(mRecordPosMap_.at(key));
+    ReadFromFile(key, val);
+    cb(key, val);
+  }
 }
 
 void TestDataset::WriteToFile(const TestDataset::RecordHeader& header, 
                               const std::string& key, const std::string& val) {
+  mRecordPosMap_[key] = mDataFile_.tellp();
   mDataFile_.write(reinterpret_cast<const char*>(&header), sizeof(header));
   mDataFile_.write(key.c_str(), key.size());
   mDataFile_.write(val.c_str(), val.size());

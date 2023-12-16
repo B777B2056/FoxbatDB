@@ -6,12 +6,17 @@
 #include <gtest/gtest.h>
 #include "common/common.h"
 #include "errors/runtime.h"
+#include "utils/utils.h"
 #include "utils/resp.h"
 #include "tools/tools.h"
 
 using namespace foxbatdb;
 using namespace std::chrono_literals;
 using CMDServerPtr = std::shared_ptr<foxbatdb::CMDSession>;
+
+static std::string TimestampKeyGenerator() {
+  return std::to_string(utils::GetMicrosecondTimestamp());
+}
 
 static void InsertIntoDBWithNoOption(CMDServerPtr cmdSession, const std::string& key, const std::string& val) {
   static auto expectResp = utils::BuildResponse("OK");
@@ -43,7 +48,7 @@ static void ReadAndTestNotExistFromDB(CMDServerPtr cmdSession, const std::string
 }
 
 TEST(SetGetTest, WithNoOption) {
-  TestDataset dataset{1024, 64};
+  TestDataset dataset{1024, 64, TimestampKeyGenerator};
   auto cmdSession = ::GetMockCMDSession();
   // 注入kv存储引擎
   dataset.Foreach(
@@ -60,7 +65,7 @@ TEST(SetGetTest, WithNoOption) {
 }
 
 TEST(SetGetTest, WithExOptionNotTimeout) {
-  TestDataset dataset{1024, 64};
+  TestDataset dataset{1024, 64, TimestampKeyGenerator};
   auto cmdSession = ::GetMockCMDSession();
   auto exTime = 1000min; // 超时时间为1000分钟
   // 注入kv存储引擎
@@ -83,7 +88,7 @@ TEST(SetGetTest, WithExOptionNotTimeout) {
 }
 
 TEST(SetGetTest, WithExOptionTimeout) {
-  TestDataset dataset{1024, 64};
+  TestDataset dataset{1024, 64, TimestampKeyGenerator};
   auto cmdSession = ::GetMockCMDSession();
   auto exTime = 1min; // 超时时间为1分钟
   // 注入kv存储引擎

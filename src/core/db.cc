@@ -1,5 +1,6 @@
 #include "db.h"
 #include <filesystem>
+#include <iostream>
 #include "common/flags.h"
 #include "errors/protocol.h"
 #include "errors/runtime.h"
@@ -194,7 +195,7 @@ namespace foxbatdb {
     }
 
     auto& fm = LogFileManager::GetInstance();
-    fm.MergeLogFile();
+    fm.Merge();
     return OKResp();
   }
 
@@ -218,8 +219,11 @@ namespace foxbatdb {
       return false;
     }
     std::fstream file{path, std::ios_base::in | std::ios::binary};
-    if (!file.is_open()) 
+    if (!file.is_open()) {
+      std::cerr << "DB file open failed: " << ::strerror(errno);
       return false;
+    }
+
     while (!file.eof()) {
       FileRecord record;
       if (!record.LoadFromDisk(file, file.tellg())) continue;

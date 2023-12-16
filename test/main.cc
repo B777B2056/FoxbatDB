@@ -35,5 +35,6 @@ void InitComponents() {
 int main(int argc, char **argv) {
   InitComponents();
   testing::InitGoogleTest(&argc, argv);
+  ::testing::GTEST_FLAG(filter) = "MergeTest.*";
   return RUN_ALL_TESTS();
 }

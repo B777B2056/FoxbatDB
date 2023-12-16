@@ -22,6 +22,6 @@ namespace foxbatdb {
     static LogFileManager& GetInstance();
     void Init();
     std::fstream* GetAvailableLogFile();
-    void MergeLogFile();
+    void Merge();
   };
 }
