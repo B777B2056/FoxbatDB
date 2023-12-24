@@ -10,25 +10,29 @@ namespace foxbatdb {
 template <typename Session>
 class TCPServer {
  public:
+  TCPServer(const TCPServer&) = delete;
+  TCPServer& operator=(const TCPServer&) = delete;
+  TCPServer(TCPServer&&) = default;
+  TCPServer& operator=(TCPServer&&) = default;
+  ~TCPServer() = default;
+
+  static TCPServer<Session>& GetInstance() {
+    static TCPServer<Session> instance;
+    return instance;
+  }
+
+  void Run() { mIOContext_.run(); }
+
+ private:
+  asio::io_context mIOContext_;
+  asio::ip::tcp::acceptor mAcceptor_;
+
   TCPServer()
       : mIOContext_{},
         mAcceptor_{mIOContext_, asio::ip::tcp::endpoint(asio::ip::tcp::v4(),
                                                         Flags::GetInstance().port)} {
     this->DoAccept();
   }
-
-  TCPServer(const TCPServer&) = delete;
-  TCPServer(TCPServer&&) = default;
-  ~TCPServer() = default;
-
-  TCPServer& operator=(const TCPServer&) = delete;
-  TCPServer& operator=(TCPServer&&) = default;
-
-  void Run() { this->mIOContext_.run(); }
-
- private:
-  asio::io_context mIOContext_;
-  asio::ip::tcp::acceptor mAcceptor_;
 
   void DoAccept() {
     this->mAcceptor_.async_accept(

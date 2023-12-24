@@ -4,7 +4,7 @@
 #include <optional>
 #include <vector>
 #include "tsl/htrie_map.h"
-#include "filemanager.h"
+#include "log/datalog.h"
 
 namespace foxbatdb {
   enum class TxRuntimeState : std::int8_t {
@@ -49,14 +49,14 @@ namespace foxbatdb {
   class ValueObject {
    private:
      std::uint8_t dbIdx;
-     mutable LogFileObjPtr logFilePtr;
+     mutable DataLogFileObjPtr logFilePtr;
      std::fstream::pos_type pos{-1};
      std::chrono::milliseconds expirationTimeMs;
      std::chrono::time_point<std::chrono::steady_clock> createdTime;
 
      const static std::chrono::milliseconds INVALID_EXPIRE_TIME;
 
-     ValueObject(std::uint8_t dbIdx, LogFileObjPtr file, std::streampos pos = -1, 
+     ValueObject(std::uint8_t dbIdx, DataLogFileObjPtr file, std::streampos pos = -1, 
                  std::chrono::milliseconds ms = INVALID_EXPIRE_TIME,
                  std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now());
 
@@ -72,20 +72,20 @@ namespace foxbatdb {
                                              const std::string& k,
                                              const std::string& v,
                                              std::chrono::milliseconds ms);
-     static std::shared_ptr<ValueObject> NewForMerge(LogFileObjPtr file,
+     static std::shared_ptr<ValueObject> NewForMerge(DataLogFileObjPtr file,
                                                      std::uint8_t dbIdx,
                                                      const std::string& k,
                                                      const std::string& v);
-     static std::shared_ptr<ValueObject> NewForHistory(LogFileObjPtr file, 
+     static std::shared_ptr<ValueObject> NewForHistory(DataLogFileObjPtr file, 
        std::streampos pos, std::uint8_t dbIdx, std::uint64_t microsecTimestamp);
      
      std::optional<std::string> GetValue() const;
      void DeleteValue(const std::string& k);
 
-     LogFileObjPtr GetLogFileHandler() const;
+     DataLogFileObjPtr GetLogFileHandler() const;
      std::optional<FileRecord> CovertToFileRecord() const;
 
-     bool IsSameLogFile(LogFileObjPtr targetFilePtr) const;
+     bool IsSameLogFile(DataLogFileObjPtr targetFilePtr) const;
      std::fstream::pos_type GetFileOffset() const;
 
      void SetExpiration(std::chrono::seconds sec);
@@ -122,8 +122,8 @@ namespace foxbatdb {
     std::error_code Put(const std::string& key, const std::string& val);
     std::weak_ptr<ValueObject> Put(std::error_code& ec, const std::string& key, const std::string& val);
 
-    std::error_code PutForMerge(LogFileObjPtr file, const std::string& key, const std::string& val);
-    std::error_code PutForHistoryData(LogFileObjPtr file, std::streampos pos,
+    std::error_code PutForMerge(DataLogFileObjPtr file, const std::string& key, const std::string& val);
+    std::error_code PutForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                                       std::uint64_t microsecTimestamp, const std::string& key);
 
     bool Contains(const std::string& key) const;

@@ -1,4 +1,4 @@
-#include "filemanager.h"
+#include "datalog.h"
 #include <regex>
 #include <iterator>
 #include <iostream>
@@ -24,7 +24,7 @@ namespace foxbatdb {
     return BuildLogFileName(std::to_string(idx));
   }
 
-  LogFileManager::LogFileManager() {
+  DataLogFileManager::DataLogFileManager() {
     // 加载历史数据
     if (std::filesystem::exists(Flags::GetInstance().dbFileDir)) {
       LoadHistoryRecordsFromDisk();
@@ -50,22 +50,22 @@ namespace foxbatdb {
         throw std::runtime_error{ std::string{"log file create failed: "} + ::strerror(errno) };
       }
       mLogFilePool_.emplace_back(
-        std::make_shared<LogFileWrapper>(fileName, std::move(file))
+        std::make_shared<DataLogFileWrapper>(fileName, std::move(file))
       );
     }
     mAvailableNode_ = mLogFilePool_.begin();
   }
 
-  LogFileManager& LogFileManager::GetInstance() {
-    static LogFileManager instance;
+  DataLogFileManager& DataLogFileManager::GetInstance() {
+    static DataLogFileManager instance;
     return instance;
   }
 
-  void LogFileManager::Init() {
+  void DataLogFileManager::Init() {
     return;
   }
 
-  LogFileObjPtr LogFileManager::GetAvailableLogFile() {
+  DataLogFileObjPtr DataLogFileManager::GetAvailableLogFile() {
     if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbFileMaxSize) {
       if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
         PoolExpand();
@@ -73,7 +73,7 @@ namespace foxbatdb {
     return *mAvailableNode_;
   }
 
-  void LogFileManager::PoolExpand() {
+  void DataLogFileManager::PoolExpand() {
     auto poolSize = mLogFilePool_.size();
     for (std::size_t i = poolSize; i < 1 + poolSize; ++i) {
       auto fileName = BuildLogFileNameByIdx(i);
@@ -85,7 +85,7 @@ namespace foxbatdb {
       }
 
       mLogFilePool_.emplace_back(
-        std::make_shared<LogFileWrapper>(fileName, std::move(file))
+        std::make_shared<DataLogFileWrapper>(fileName, std::move(file))
       );
     }
 
@@ -94,7 +94,7 @@ namespace foxbatdb {
     }
   }
   
-  bool LogFileManager::LoadHistoryTxFromDisk(std::shared_ptr<LogFileWrapper> fileWrapper, 
+  bool DataLogFileManager::LoadHistoryTxFromDisk(std::shared_ptr<DataLogFileWrapper> fileWrapper, 
                                              std::uint64_t txNum) {
     auto& file = fileWrapper->file;
     auto& dbm = DatabaseManager::GetInstance();
@@ -128,7 +128,7 @@ namespace foxbatdb {
     return true;
   }
 
-  void LogFileManager::LoadHistoryRecordsFromDisk() {
+  void DataLogFileManager::LoadHistoryRecordsFromDisk() {
     auto& dbm = DatabaseManager::GetInstance();
     std::stringstream ss;
     ss << Flags::GetInstance().dbFileDir << "/" << CFileNamePrefix
@@ -158,7 +158,7 @@ namespace foxbatdb {
           continue; 
         }
         mLogFilePool_.emplace_back(
-          std::make_shared<LogFileWrapper>(fileName, std::move(file))
+          std::make_shared<DataLogFileWrapper>(fileName, std::move(file))
         );
     }
 
@@ -192,7 +192,7 @@ namespace foxbatdb {
     mAvailableNode_ = std::prev(mLogFilePool_.end());
   }
 
-  void LogFileManager::Merge() {
+  void DataLogFileManager::Merge() {
     // 创建merge文件
     auto mergeFileName = BuildLogFileName("merge");
     std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
@@ -207,7 +207,7 @@ namespace foxbatdb {
     // 向文件池插入merge文件
     auto savedMergeFileNode = mLogFilePool_.insert(
       currentAvailableNode,
-      std::make_shared<LogFileWrapper>(mergeFileName, std::move(mergeFile))
+      std::make_shared<DataLogFileWrapper>(mergeFileName, std::move(mergeFile))
     );
 
     // 合并db文件

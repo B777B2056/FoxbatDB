@@ -98,12 +98,12 @@ namespace foxbatdb {
     void Foreach(StorageEngine::ForeachCallback callback);
     void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
 
-    void StrSetForHistoryData(LogFileObjPtr file, std::streampos pos,
+    void StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                               const FileRecord& record);
     std::tuple<std::error_code, std::optional<std::string>> StrSet(
         const std::string& key, const std::string& val,
         const std::vector<CommandOption>& opts = {});
-    void StrSetForMerge(LogFileObjPtr mergeFile,
+    void StrSetForMerge(DataLogFileObjPtr mergeFile,
                         const std::string& key, const std::string& val);
     std::optional<std::string> StrGet(const std::string& key);
     std::error_code Del(const std::string& key);

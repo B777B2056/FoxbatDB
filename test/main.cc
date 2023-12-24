@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <new>
 #include "core/db.h"
-#include "core/filemanager.h"
+#include "log/datalog.h"
 #include "cron/cron.h"
 #include "flag/flags.h"
 #include "network/access.h"
@@ -28,7 +28,7 @@ void InitComponents() {
   std::set_new_handler(MemoryAllocRetryFunc);
   foxbatdb::Flags::GetInstance().Init(flagConfPath);
   foxbatdb::DatabaseManager::GetInstance().Init();
-  foxbatdb::LogFileManager::GetInstance().Init();
+  foxbatdb::DataLogFileManager::GetInstance().Init();
   foxbatdb::CronJobManager::GetInstance().Init();
 }
 

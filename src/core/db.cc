@@ -192,7 +192,7 @@ namespace foxbatdb {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
-    auto& fm = LogFileManager::GetInstance();
+    auto& fm = DataLogFileManager::GetInstance();
     fm.Merge();
     return OKResp();
   }
@@ -323,7 +323,7 @@ namespace foxbatdb {
       }
     }
   }
-  void Database::StrSetForHistoryData(LogFileObjPtr file, std::streampos pos,
+  void Database::StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                                       const FileRecord& record) {
     mEngine_.PutForHistoryData(file, pos, record.header.timestamp, record.data.key);
   }
@@ -351,7 +351,7 @@ namespace foxbatdb {
     return std::make_tuple(error::ProtocolErrorCode::kSuccess, data);
   }
 
-  void Database::StrSetForMerge(LogFileObjPtr mergeFile, 
+  void Database::StrSetForMerge(DataLogFileObjPtr mergeFile, 
                                 const std::string& key, const std::string& val) {
     mEngine_.PutForMerge(mergeFile, key, val);
   }

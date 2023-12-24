@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "flag/flags.h"
-#include "core/filemanager.h"
+#include "log/datalog.h"
 #include "utils/resp.h"
 #include "tools/tools.h"
 
@@ -49,7 +49,7 @@ TEST(MergeTest, Merge) {
     }
   );
   // 合并文件
-  LogFileManager::GetInstance().Merge();
+  DataLogFileManager::GetInstance().Merge();
   // 从kv存储引擎读取并测试数据
   dataset.Foreach(
     [cmdSession](const std::string& key, const std::string& val)->void {

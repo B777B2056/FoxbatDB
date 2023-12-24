@@ -2,7 +2,7 @@
 #include <algorithm>
 #include "core/db.h"
 #include "errors/runtime.h"
-#include "persistence/persistence.h"
+#include "log/oplog.h"
 #include "utils/resp.h"
 
 namespace foxbatdb {

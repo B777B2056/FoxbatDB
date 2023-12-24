@@ -1,22 +1,54 @@
 #include "cron.h"
 #include <iostream>
 #include "flag/flags.h"
-#include "persistence/persistence.h"
+#include "log/oplog.h"
 
 namespace foxbatdb {
+  namespace detail {
+    RepeatedTimer::RepeatedTimer(asio::io_context& ioContext,
+                                TimeoutHandler timeoutCallback)
+      : mTimer_(ioContext),
+        mTimeoutCallback_(std::move(timeoutCallback)) {}
+
+    void RepeatedTimer::SetTimeoutHandler(TimeoutHandler timeoutCallback) {
+      mTimeoutCallback_ = std::move(timeoutCallback);
+    }
+  
+    void RepeatedTimer::Start(std::chrono::milliseconds timeoutMS) {
+      Reset(timeoutMS);
+    }
+
+    void RepeatedTimer::Stop() {
+      mIsNeedStop_ = true;
+    }
+
+    void RepeatedTimer::Reset(std::chrono::milliseconds timeoutMS) {
+      mTimer_.expires_from_now(timeoutMS);
+      mTimer_.async_wait([this, timeoutMS](const asio::error_code& ec) {
+        if (mIsNeedStop_) return;
+        if (!ec && mTimeoutCallback_)
+          mTimeoutCallback_();
+        this->Reset(timeoutMS);
+      });
+    }
+  }
+
   CronJobManager::CronJobManager()
     : mIOContext_{}
-    , mAOFFlushTimer_{mIOContext_} {
-    AddJobs();
-    mCronThread_ = std::thread{[this] { mIOContext_.run(); }};
-    Start();
+    , mOperationLogDumpTimer_{mIOContext_} {
+    mWait_ = std::async(
+      std::launch::async, 
+      [this]()->void {
+        this->AddJobs();
+        this->Start();
+        this->mIOContext_.run();
+      }
+    );
   }
 
   CronJobManager::~CronJobManager() {
-    mAOFFlushTimer_.Stop();
-    if (mCronThread_.joinable()) {
-      mCronThread_.join();
-    }
+    mOperationLogDumpTimer_.Stop();
+    mWait_.wait();
   }
 
   CronJobManager& CronJobManager::GetInstance() {
@@ -25,17 +57,20 @@ namespace foxbatdb {
   }
 
   void CronJobManager::AddJobs() {
-    mAOFFlushTimer_.SetTimeoutHandler(
-      [this]()->void {
-        Persister::GetInstance().FlushToDisk();
+    mOperationLogDumpTimer_.SetTimeoutHandler(
+      []()->void {
+        OperationLog::GetInstance().DumpToDisk();
+        std::cout << "Flush bin log to disk OK!" << std::endl;
       }
     );
   }
 
   void CronJobManager::Start() {
-    mAOFFlushTimer_.Start(
+    mOperationLogDumpTimer_.Start(
       std::chrono::milliseconds{Flags::GetInstance().logWriteCronJobPeriodMs}
     );
+
+    
   }
 
   void CronJobManager::Init() {

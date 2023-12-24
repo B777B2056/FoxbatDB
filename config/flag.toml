@@ -4,7 +4,7 @@ databaseNumber = 16
 
 [aof]
 aofCronJobPeriodMs = 3000
-aofLogFilePath = "foxbat.log"
+aofLogFilePath = "foxbat.oplog"
 
 [dbfile]
 dbFileDirectory = "db"

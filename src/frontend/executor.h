@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 #include "cmdmap.h"
-#include "core/filemanager.h"
+#include "log/datalog.h"
 
 namespace foxbatdb {
   class Command;
@@ -25,7 +25,7 @@ namespace foxbatdb {
   private:
     struct TxUndoInfo {
       std::uint64_t txID;
-      LogFileObjPtr dbFile;
+      DataLogFileObjPtr dbFile;
       std::streampos readpos;
     };
 

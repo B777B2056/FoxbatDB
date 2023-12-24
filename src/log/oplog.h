@@ -1,10 +1,15 @@
 #pragma once
 #include <atomic>
 #include <cstddef>
+#include <thread>
+#include <fstream>
+#include <future>
 #include <memory>
+#include <mutex>
+#include <string>
 
 namespace foxbatdb {
-  namespace utils {
+  namespace detail {
     /* 单读单写无锁环形队列 */
     template<typename T>
     class RingBuffer {
@@ -56,4 +61,25 @@ namespace foxbatdb {
       }
     };
   }
+
+  class OperationLog {
+  private:
+    std::jthread mThread_;
+    std::ofstream mFile_;
+    std::mutex mFileMutex_;
+    std::atomic_flag mNeedWriteAll_;
+    std::promise<void> mWriteAllBarrier_;
+    detail::RingBuffer<std::string> mCmdBuffer_;
+
+    OperationLog();
+    void WriteOneCommand();  // 从缓冲队列里取出一条写命令，刷入os内核文件写缓冲区
+    void WriteAllCommand();  // 从缓冲队列里取出所有写命令，刷入os内核文件写缓冲区
+
+  public:
+    ~OperationLog();
+    static OperationLog& GetInstance();
+    void Stop();
+    void AppendCommand(const std::string& cmd);
+    void DumpToDisk();
+  };
 }

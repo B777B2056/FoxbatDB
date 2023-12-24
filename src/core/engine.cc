@@ -153,7 +153,7 @@ namespace foxbatdb {
 
   const std::chrono::milliseconds ValueObject::INVALID_EXPIRE_TIME {ULLONG_MAX};
 
-  ValueObject::ValueObject(std::uint8_t dbIdx, LogFileObjPtr file,
+  ValueObject::ValueObject(std::uint8_t dbIdx, DataLogFileObjPtr file,
                            std::streampos pos, std::chrono::milliseconds ms,
                            std::chrono::time_point<std::chrono::steady_clock> createdTime)
     : dbIdx{dbIdx}, logFilePtr{file}, pos{pos}, expirationTimeMs{ms}, createdTime{createdTime} {}
@@ -168,13 +168,13 @@ namespace foxbatdb {
                                                 const std::string& k,
                                                 const std::string& v,
                                                 std::chrono::milliseconds ms) {
-    auto& logFileManager = LogFileManager::GetInstance();
+    auto& logFileManager = DataLogFileManager::GetInstance();
     std::shared_ptr<ValueObject> obj{new ValueObject(dbIdx, logFileManager.GetAvailableLogFile(), -1, ms)};
     obj->UpdateValue(k, v);
     return obj;
   }
 
-  std::shared_ptr<ValueObject> ValueObject::NewForMerge(LogFileObjPtr file,
+  std::shared_ptr<ValueObject> ValueObject::NewForMerge(DataLogFileObjPtr file,
                                                         std::uint8_t dbIdx,
                                                         const std::string& k,
                                                         const std::string& v) {
@@ -184,7 +184,7 @@ namespace foxbatdb {
   }
 
   std::shared_ptr<ValueObject> ValueObject::NewForHistory(
-      LogFileObjPtr file, std::streampos pos, std::uint8_t dbIdx, std::uint64_t microsecTimestamp) {
+      DataLogFileObjPtr file, std::streampos pos, std::uint8_t dbIdx, std::uint64_t microsecTimestamp) {
     auto createdTime = utils::MicrosecondTimestampCovertToTimePoint(microsecTimestamp);
     return std::shared_ptr<ValueObject>{new ValueObject(dbIdx, file, pos, INVALID_EXPIRE_TIME, createdTime)};
   }
@@ -212,7 +212,7 @@ namespace foxbatdb {
     UpdateValue(k, "");
   }
 
-  LogFileObjPtr ValueObject::GetLogFileHandler() const {
+  DataLogFileObjPtr ValueObject::GetLogFileHandler() const {
     return this->logFilePtr;
   }
 
@@ -225,7 +225,7 @@ namespace foxbatdb {
     }
   }
 
-  bool ValueObject::IsSameLogFile(LogFileObjPtr targetFilePtr) const {
+  bool ValueObject::IsSameLogFile(DataLogFileObjPtr targetFilePtr) const {
     auto targetFile = targetFilePtr.lock();
     auto logFile = logFilePtr.lock();
     if (!targetFile || !logFile) {
@@ -293,7 +293,7 @@ namespace foxbatdb {
       assert(0 == txCmdNum);
     else
       assert(0 != txCmdNum);
-    auto& logFileManager = LogFileManager::GetInstance();
+    auto& logFileManager = DataLogFileManager::GetInstance();
     auto& targetLogFile = logFileManager.GetAvailableLogFile().lock()->file;
     FileRecord{}.DumpTxFlagToDisk(targetLogFile, mDBIdx_, txFlag, txCmdNum);
   }
@@ -319,7 +319,7 @@ namespace foxbatdb {
     return valObj;
   }
 
-  std::error_code StorageEngine::PutForMerge(LogFileObjPtr file, 
+  std::error_code StorageEngine::PutForMerge(DataLogFileObjPtr file, 
                                              const std::string& key, const std::string& val) {
     auto valObj = ValueObject::NewForMerge(file, mDBIdx_, key, val);
     if (!valObj) {
@@ -331,7 +331,7 @@ namespace foxbatdb {
     return error::RuntimeErrorCode::kSuccess;
   }
 
-  std::error_code StorageEngine::PutForHistoryData(LogFileObjPtr file, std::streampos pos, 
+  std::error_code StorageEngine::PutForHistoryData(DataLogFileObjPtr file, std::streampos pos, 
                                                    std::uint64_t microsecTimestamp, 
                                                    const std::string& key) {
     auto valObj = ValueObject::NewForHistory(file, pos, mDBIdx_, microsecTimestamp);

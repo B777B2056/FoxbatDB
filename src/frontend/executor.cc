@@ -4,7 +4,7 @@
 #include "cmdmap.h"
 #include "errors/runtime.h"
 #include "parser.h"
-#include "persistence/persistence.h"
+#include "log/oplog.h"
 #include "utils/resp.h"
 #include "network/cmd.h"
 
@@ -202,7 +202,7 @@ namespace foxbatdb {
         break;
     }
     if (result.isWriteCmd) {
-      Persister::GetInstance().AppendCommand(result.cmdText);
+      OperationLog::GetInstance().AppendCommand(result.cmdText);
     }
     return resp;
   }

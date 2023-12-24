@@ -1,8 +1,8 @@
-#include "persistence.h"
+#include "oplog.h"
 #include "flag/flags.h"
 
 namespace foxbatdb {
-  Persister::Persister()
+  OperationLog::OperationLog()
     : mFile_{Flags::GetInstance().logFileName,
              std::ios::out | std::ios::app | std::ios::binary} {
     mThread_ = std::jthread{
@@ -22,21 +22,21 @@ namespace foxbatdb {
     };
   }
 
-  Persister::~Persister() {
-    FlushToDisk();
+  OperationLog::~OperationLog() {
+    DumpToDisk();
     Stop();
   }
 
-  Persister& Persister::GetInstance() {
-    static Persister instance;
+  OperationLog& OperationLog::GetInstance() {
+    static OperationLog instance;
     return instance;
   }
 
-  void Persister::Stop() {
+  void OperationLog::Stop() {
     mThread_.request_stop();
   }
 
-  void Persister::AppendCommand(const std::string& cmd) {
+  void OperationLog::AppendCommand(const std::string& cmd) {
     if (mCmdBuffer_.IsFull()) {
       // 环形队列满，则等待子线程完成所有数据写入
       mNeedWriteAll_.test_and_set();
@@ -45,21 +45,21 @@ namespace foxbatdb {
     mCmdBuffer_.Enqueue(cmd);
   }
 
-  void Persister::WriteOneCommand() {
+  void OperationLog::WriteOneCommand() {
     if (std::string cmd; mCmdBuffer_.Dequeue(cmd)) {
       std::unique_lock lock {mFileMutex_};
       mFile_ << cmd;
     }
   }
 
-  void Persister::WriteAllCommand() {
+  void OperationLog::WriteAllCommand() {
     for (std::string cmd; mCmdBuffer_.Dequeue(cmd); ) {
       std::unique_lock lock{mFileMutex_};
       mFile_ << cmd;
     }
   }
 
-  void Persister::FlushToDisk() {
+  void OperationLog::DumpToDisk() {
     std::unique_lock lock{mFileMutex_};
     mFile_.flush();
   }
