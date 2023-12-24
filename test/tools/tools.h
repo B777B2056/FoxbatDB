@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include "network/cmd.h"
+#include "frontend/server.h"
 
 std::shared_ptr<foxbatdb::CMDSession> GetMockCMDSession();
 std::string GenRandomString(std::size_t length);

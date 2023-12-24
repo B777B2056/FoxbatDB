@@ -1,6 +1,6 @@
 #include "pubsub.h"
 #include <algorithm>
-#include "network/cmd.h"
+#include "frontend/server.h"
 
 namespace foxbatdb {
   void PubSubWithChannel::Subscribe(const std::string& channel,

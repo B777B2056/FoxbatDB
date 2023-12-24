@@ -30,6 +30,7 @@ namespace foxbatdb {
   private:
     asio::io_context mIOContext_;
     std::future<void> mWait_;
+    detail::RepeatedTimer mServerLogDumpTimer_;
     detail::RepeatedTimer mOperationLogDumpTimer_;
 
     CronJobManager();

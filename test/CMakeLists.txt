@@ -23,7 +23,7 @@ file(GLOB_RECURSE TOOLS_TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/tools/*.cc")
 file(GLOB_RECURSE FUNCTION_TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/function/*.cc")
 
 add_executable(foxbatdb_test "main.cc" ${SRC} ${3rd_SRC} ${TOOLS_TEST_SRC} ${FUNCTION_TEST_SRC})
-target_link_libraries(foxbatdb_test PUBLIC Threads::Threads GTest::gtest_main)
+target_link_libraries(foxbatdb_test PRIVATE Threads::Threads GTest::gtest_main spdlog::spdlog)
 
 include(GoogleTest)
 gtest_discover_tests(foxbatdb_test DISCOVERY_TIMEOUT 600)

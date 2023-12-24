@@ -1,7 +1,7 @@
 #include "cron.h"
-#include <iostream>
 #include "flag/flags.h"
 #include "log/oplog.h"
+#include "log/serverlog.h"
 
 namespace foxbatdb {
   namespace detail {
@@ -35,6 +35,7 @@ namespace foxbatdb {
 
   CronJobManager::CronJobManager()
     : mIOContext_{}
+    , mServerLogDumpTimer_{mIOContext_}
     , mOperationLogDumpTimer_{mIOContext_} {
     mWait_ = std::async(
       std::launch::async, 
@@ -57,20 +58,26 @@ namespace foxbatdb {
   }
 
   void CronJobManager::AddJobs() {
+    mServerLogDumpTimer_.SetTimeoutHandler(
+      []()->void {
+        ServerLog::DumpToDisk();
+      }
+    );
     mOperationLogDumpTimer_.SetTimeoutHandler(
       []()->void {
         OperationLog::GetInstance().DumpToDisk();
-        std::cout << "Flush bin log to disk OK!" << std::endl;
+        ServerLog::Info("flush operation log to disk ok");
       }
     );
   }
 
   void CronJobManager::Start() {
-    mOperationLogDumpTimer_.Start(
-      std::chrono::milliseconds{Flags::GetInstance().logWriteCronJobPeriodMs}
+    mServerLogDumpTimer_.Start(
+      std::chrono::milliseconds{Flags::GetInstance().serverLogFlushPeriodSec * 1000}
     );
-
-    
+    mOperationLogDumpTimer_.Start(
+      std::chrono::milliseconds{Flags::GetInstance().operationLogWriteCronJobPeriodMs}
+    );
   }
 
   void CronJobManager::Init() {

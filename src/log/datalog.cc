@@ -1,7 +1,6 @@
 #include "datalog.h"
 #include <regex>
 #include <iterator>
-#include <iostream>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -10,13 +9,14 @@
 #include <vector>
 #include "flag/flags.h"
 #include "core/db.h"
+#include "serverlog.h"
 
 namespace foxbatdb {
   static constexpr std::string_view CFileNamePrefix = "foxbat-";
   static constexpr std::string_view CFileNameSuffix = ".db";
 
   static std::string BuildLogFileName(const std::string& content) {
-    return Flags::GetInstance().dbFileDir + "/" + std::string{CFileNamePrefix} +
+    return Flags::GetInstance().dbLogFileDir + "/" + std::string{CFileNamePrefix} +
            content + std::string{CFileNameSuffix};
   }
 
@@ -26,7 +26,7 @@ namespace foxbatdb {
 
   DataLogFileManager::DataLogFileManager() {
     // 加载历史数据
-    if (std::filesystem::exists(Flags::GetInstance().dbFileDir)) {
+    if (std::filesystem::exists(Flags::GetInstance().dbLogFileDir)) {
       LoadHistoryRecordsFromDisk();
       if (!mLogFilePool_.empty()) {
         return;
@@ -34,9 +34,9 @@ namespace foxbatdb {
     }
 
     // 若文件夹不存在，则创建文件夹
-    if (!std::filesystem::exists(Flags::GetInstance().dbFileDir) ||
-        !std::filesystem::is_directory(Flags::GetInstance().dbFileDir)) {
-      if (!std::filesystem::create_directory(Flags::GetInstance().dbFileDir)) {
+    if (!std::filesystem::exists(Flags::GetInstance().dbLogFileDir) ||
+        !std::filesystem::is_directory(Flags::GetInstance().dbLogFileDir)) {
+      if (!std::filesystem::create_directory(Flags::GetInstance().dbLogFileDir)) {
         throw std::runtime_error{"log file directory create failed"};
       }
     }
@@ -66,7 +66,7 @@ namespace foxbatdb {
   }
 
   DataLogFileObjPtr DataLogFileManager::GetAvailableLogFile() {
-    if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbFileMaxSize) {
+    if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
       if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
         PoolExpand();
     }
@@ -80,7 +80,7 @@ namespace foxbatdb {
       std::fstream file{fileName, std::ios::in | std::ios::out |
                                       std::ios::binary | std::ios::app};
       if (!file.is_open()) {
-        std::cerr << "DB file open failed: " << ::strerror(errno);
+        ServerLog::Error("data log file pool expand failed: {}", ::strerror(errno));
         continue;
       }
 
@@ -131,12 +131,12 @@ namespace foxbatdb {
   void DataLogFileManager::LoadHistoryRecordsFromDisk() {
     auto& dbm = DatabaseManager::GetInstance();
     std::stringstream ss;
-    ss << Flags::GetInstance().dbFileDir << "/" << CFileNamePrefix
+    ss << Flags::GetInstance().dbLogFileDir << "/" << CFileNamePrefix
        << "[[:digit:]]+\\" << CFileNameSuffix;
     std::regex regexpr{ss.str()};
     // 获取目标目录下匹配日志文件格式的所有文件名
     std::vector<std::string> fileNames;
-    for (auto& p : std::filesystem::directory_iterator{Flags::GetInstance().dbFileDir}) {
+    for (auto& p : std::filesystem::directory_iterator{Flags::GetInstance().dbLogFileDir}) {
       if (!p.exists() ||
           !p.is_regular_file() ||
           !p.file_size() ||
@@ -154,7 +154,7 @@ namespace foxbatdb {
         std::fstream file{fileName, std::ios::in | std::ios::out |
                                         std::ios::binary | std::ios::app};
         if (!file.is_open()) {
-          std::cerr << "DB file open failed: " << ::strerror(errno);
+          ServerLog::Error("history data log file open failed: {}", ::strerror(errno));
           continue; 
         }
         mLogFilePool_.emplace_back(
@@ -198,7 +198,7 @@ namespace foxbatdb {
     std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
                                               std::ios::binary | std::ios::app};
     if (!mergeFile.is_open()) {
-      std::cerr << "DB merge file open failed: " << ::strerror(errno);
+      ServerLog::Error("merge data log file open failed: {}", ::strerror(errno));
       return;
     }
 

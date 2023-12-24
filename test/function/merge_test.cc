@@ -37,8 +37,8 @@ TEST(MergeTest, Merge) {
   constexpr static std::size_t datasetRecordNum = 1024 * 1024;
   constexpr static std::size_t recordSize = sizeof(TestDataset::RecordHeader) + KEY_LENGTH + VAL_LENGTH;
 
-  auto dbFileMaxSizeBefore = Flags::GetInstance().dbFileMaxSize;
-  Flags::GetInstance().dbFileMaxSize = (datasetRecordNum * recordSize) / dbFileNum;
+  auto dbFileMaxSizeBefore = Flags::GetInstance().dbLogFileMaxSize;
+  Flags::GetInstance().dbLogFileMaxSize = (datasetRecordNum * recordSize) / dbFileNum;
 
   TestDataset dataset{datasetRecordNum, VAL_LENGTH, DuplicatedKeyGenerator};
   auto cmdSession = ::GetMockCMDSession();
@@ -57,5 +57,5 @@ TEST(MergeTest, Merge) {
       }
   );   
   // ª÷∏¥dbFileSize…Ë÷√
-  Flags::GetInstance().dbFileMaxSize = dbFileMaxSizeBefore;
+  Flags::GetInstance().dbLogFileMaxSize = dbFileMaxSizeBefore;
 }

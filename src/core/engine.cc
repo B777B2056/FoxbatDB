@@ -4,6 +4,7 @@
 #include "errors/runtime.h"
 #include "utils/utils.h"
 #include "memory.h"
+#include "log/serverlog.h"
 
 namespace foxbatdb {
   static bool ValidateFileRecordHeader(const FileRecordHeader& header) {
@@ -309,7 +310,7 @@ namespace foxbatdb {
     ec = error::RuntimeErrorCode::kSuccess;
     auto valObj = ValueObject::New(mDBIdx_, key, val);
     if (!valObj) {
-      // TODO£ºÄÚ´æºÄ¾¡
+      ServerLog::Error("memory allocate failed");
       ec = error::RuntimeErrorCode::kMemoryOut;
       return {};
     }
@@ -323,7 +324,7 @@ namespace foxbatdb {
                                              const std::string& key, const std::string& val) {
     auto valObj = ValueObject::NewForMerge(file, mDBIdx_, key, val);
     if (!valObj) {
-      // TODO£ºÄÚ´æºÄ¾¡
+      ServerLog::Error("memory allocate failed");
       return error::RuntimeErrorCode::kMemoryOut;
     }
 

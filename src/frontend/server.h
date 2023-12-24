@@ -41,4 +41,23 @@ private:
   void DoWrite(const std::string& data);
   void ProcessMsg(std::size_t length);
 };
+
+class DBServer {
+ public:
+  DBServer(const DBServer&) = delete;
+  DBServer& operator=(const DBServer&) = delete;
+  DBServer(DBServer&&) = default;
+  DBServer& operator=(DBServer&&) = default;
+  ~DBServer() = default;
+
+  static DBServer& GetInstance();
+  void Run();
+
+ private:
+  asio::io_context mIOContext_;
+  asio::ip::tcp::acceptor mAcceptor_;
+
+  DBServer();
+  void DoAccept();
+};
 }  // namespace foxbatdb

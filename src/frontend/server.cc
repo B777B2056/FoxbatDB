@@ -1,8 +1,12 @@
-﻿#include "cmd.h"
+﻿#include "server.h"
 #include <algorithm>
+#include <cstdint>
+#include <memory>
 #include "core/db.h"
 #include "errors/runtime.h"
+#include "flag/flags.h"
 #include "log/oplog.h"
+#include "log/serverlog.h"
 #include "utils/resp.h"
 
 namespace foxbatdb {
@@ -56,6 +60,8 @@ void CMDSession::DoRead() {
       [this, self](std::error_code ec, std::size_t length) {
         if (!ec) {
           ProcessMsg(length);
+        } else {
+          ServerLog::Warnning("read request from client failed: {}", ec.message());
         }
       }
   );
@@ -67,6 +73,8 @@ void CMDSession::DoWrite(const std::string& data) {
                     [this, self](std::error_code ec, std::size_t) {
                       if (!ec) {
                         DoRead();
+                      } else {
+                        ServerLog::Warnning("write response to client failed: {}", ec.message());
                       }
                     }
   );
@@ -88,5 +96,32 @@ void CMDSession::ProcessMsg(std::size_t length) {
       DoRead();
     }
   }
+}
+DBServer::DBServer()
+    : mIOContext_{},
+      mAcceptor_{mIOContext_, asio::ip::tcp::endpoint(asio::ip::tcp::v4(),
+                                                      Flags::GetInstance().port)} {
+  this->DoAccept();
+}
+
+
+DBServer& DBServer::GetInstance() {
+  static DBServer instance;
+  return instance;
+}
+
+void DBServer::Run() { mIOContext_.run(); }
+
+void DBServer::DoAccept() {
+  this->mAcceptor_.async_accept(
+      [this](std::error_code ec, asio::ip::tcp::socket socket) {
+        if (!ec) {
+          std::make_shared<CMDSession>(std::move(socket))->Start();
+        } else {
+          ServerLog::Warnning("accept connection failed: {}", ec.message());
+        }
+        this->DoAccept();
+      }
+  );
 }
 }  // namespace foxbatdb

@@ -1,11 +1,11 @@
 #include "db.h"
 #include <filesystem>
-#include <iostream>
 #include "flag/flags.h"
 #include "errors/protocol.h"
 #include "errors/runtime.h"
 #include "frontend/cmdmap.h"
-#include "network/cmd.h"
+#include "frontend/server.h"
+#include "log/serverlog.h"
 #include "memory.h"
 #include "utils/utils.h"
 
@@ -223,7 +223,7 @@ namespace foxbatdb {
     }
     std::fstream file{path, std::ios_base::in | std::ios::binary};
     if (!file.is_open()) {
-      std::cerr << "DB file open failed: " << ::strerror(errno);
+      ServerLog::Error("data log file open failed: {}", ::strerror(errno));
       return false;
     }
 

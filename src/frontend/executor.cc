@@ -6,7 +6,7 @@
 #include "parser.h"
 #include "log/oplog.h"
 #include "utils/resp.h"
-#include "network/cmd.h"
+#include "frontend/server.h"
 
 namespace foxbatdb {
   CMDExecutor::CMDExecutor()

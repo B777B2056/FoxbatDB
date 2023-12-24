@@ -5,11 +5,15 @@
 namespace foxbatdb {
   struct Flags {
     std::uint16_t port;
-    std::int64_t logWriteCronJobPeriodMs;
-    std::string logFileName;
-    std::string dbFileDir;
+    std::string serverLogPath;
+    std::uint64_t serverLogMaxFileSize;
+    std::uint64_t serverLogMaxFileNumber;
+    std::int64_t serverLogFlushPeriodSec;
+    std::int64_t operationLogWriteCronJobPeriodMs;
+    std::string operationLogFileName;
+    std::string dbLogFileDir;
     std::uint8_t dbMaxNum;
-    std::uint64_t dbFileMaxSize;
+    std::uint64_t dbLogFileMaxSize;
     std::uint32_t keyMaxBytes;
     std::uint32_t valMaxBytes;
 
