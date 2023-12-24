@@ -19,19 +19,15 @@ Database* CMDSession::CurrentDB() {
   return mExecutor_.CurrentDB();
 }
 
-std::uint8_t CMDSession::CurrentDBIdx() const {
-  return mExecutor_.CurrentDBIdx();
-}
-
 void CMDSession::SwitchToTargetDB(std::uint8_t dbIdx) {
   mExecutor_.SwitchToTargetDB(dbIdx);
 }
 
-void CMDSession::AddWatchKey(const BinaryString& key) {
+void CMDSession::AddWatchKey(const std::string& key) {
   mExecutor_.AddWatchKey(key);
 }
 
-void CMDSession::DelWatchKey(const BinaryString& key) {
+void CMDSession::DelWatchKey(const std::string& key) {
   mExecutor_.DelWatchKey(key);
 }
 
@@ -39,11 +35,11 @@ void CMDSession::SetCurrentTxToFail() {
   mExecutor_.SetCurrentTxToFail();
 }
 
-void CMDSession::WritePublishMsg(const BinaryString& channel,
-                                 const BinaryString& msg) {
+void CMDSession::WritePublishMsg(const std::string& channel,
+                                 const std::string& msg) {
   auto self(shared_from_this());
   DoWrite(utils::BuildPubSubResponse(
-    std::vector<std::string>{"message", channel.ToTextString(), msg.ToTextString()}));
+    std::vector<std::string>{"message", channel, msg}));
 }
 
 #ifdef _FOXBATDB_SELF_TEST
@@ -86,14 +82,10 @@ void CMDSession::ProcessMsg(std::size_t length) {
     else
       lineView = {line.begin(), line.end()};
     ParseResult result = mParser_.ParseLine(lineView);
-    if (result.hasError) {
-      DoWrite(result.errMsg);
+    if (result.hasError || mParser_.IsParseFinished()) {
+      DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
     } else {
-      if (mParser_.IsParseFinished()) {
-        DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
-      } else {
-        DoRead();
-      }
+      DoRead();
     }
   }
 }

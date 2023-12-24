@@ -19,14 +19,13 @@ class CMDSession : public std::enable_shared_from_this<CMDSession> {
   void Start();
 
   Database* CurrentDB();
-  std::uint8_t CurrentDBIdx() const;
   void SwitchToTargetDB(std::uint8_t dbIdx);
 
-  void AddWatchKey(const BinaryString& key);
-  void DelWatchKey(const BinaryString& key);
+  void AddWatchKey(const std::string& key);
+  void DelWatchKey(const std::string& key);
   void SetCurrentTxToFail();
 
-  void WritePublishMsg(const BinaryString& channel, const BinaryString& msg);
+  void WritePublishMsg(const std::string& channel, const std::string& msg);
 
 #ifdef _FOXBATDB_SELF_TEST
   std::string DoExecOneCmd(const ParseResult& result);

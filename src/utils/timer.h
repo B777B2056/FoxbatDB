@@ -8,7 +8,7 @@ namespace foxbatdb {
   namespace utils {
     class RepeatedTimer final {
      public:
-      using TimeoutHandler = std::function<void(const std::error_code& e)>;
+      using TimeoutHandler = std::function<void()>;
 
       RepeatedTimer(asio::io_context& io_service);
       RepeatedTimer(asio::io_context& io_service, TimeoutHandler timeout_handler);

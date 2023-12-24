@@ -2,7 +2,6 @@
 #include <filesystem>
 #include <random>
 #include <system_error>
-#include "common/common.h"
 #include "frontend/cmdmap.h"
 #include "frontend/parser.h"
 
@@ -26,17 +25,24 @@ std::string GenRandomString(std::size_t length) {
 }
 
 foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
+  bool isCmdExist = foxbatdb::MainCommandMap.contains(cmdName);
+  if (!isCmdExist) {
+    return foxbatdb::ParseResult{
+      .hasError=true,
+      .isWriteCmd=false,
+      .data={},
+    };
+  }
   foxbatdb::ParseResult cmd {
     .hasError=false,
     .isWriteCmd=foxbatdb::MainCommandMap.at(cmdName).isWriteCmd,
-    .txState=foxbatdb::TxState::kInvalid,
     .data = foxbatdb::Command{
       .name=cmdName,
       .call=foxbatdb::MainCommandMap.at(cmdName).call,
     }
   };
   for (const auto& param : argv) {
-    cmd.data.argv.emplace_back(foxbatdb::BinaryString{param});
+    cmd.data.argv.emplace_back(param);
   }
   return cmd;
 }
@@ -46,7 +52,6 @@ foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std
   foxbatdb::ParseResult cmd {
     .hasError=false,
     .isWriteCmd=foxbatdb::MainCommandMap.at(cmdName).isWriteCmd,
-    .txState=foxbatdb::TxState::kInvalid,
     .data = foxbatdb::Command{
       .name=cmdName,
       .call=foxbatdb::MainCommandMap.at(cmdName).call,
@@ -54,7 +59,7 @@ foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std
     }
   };
   for (const auto& param : argv) {
-    cmd.data.argv.emplace_back(foxbatdb::BinaryString{param});
+    cmd.data.argv.emplace_back(param);
   }
   return cmd;
 }
@@ -66,7 +71,7 @@ TestDataset::TestDataset(std::size_t datasetSize, std::size_t singleStringMaxLen
   , mSingleStringMaxLength_{singleStringMaxLength}
   , mDataFile_{TempDatasetFile, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc} {
   if (!mDataFile_.is_open()) {
-    throw std::runtime_error("temp data file open failed");
+    throw std::runtime_error{std::string{"temp data file open failed: "} + ::strerror(errno)};
   }
   for (std::size_t i = 0; i < mDatasetSize_; ++i) {
     auto key = keyGenerator();
@@ -91,21 +96,9 @@ void TestDataset::Foreach(std::function<void(const std::string&, const std::stri
   mDataFile_.clear();
   mDataFile_.seekg(0);
 
-  for (std::size_t i = 0; i < mDatasetSize_; ++i) {
+  for (const auto& [_, pos] : mRecordPosMap_) {
     std::string key, val;
-    ReadFromFile(key, val);
-    cb(key, val);
-  }
-}
-
-void TestDataset::ForeachWithDuplicatedKey(std::function<void(const std::string&, const std::string&)> cb) {
-  mDataFile_.clear();
-  mDataFile_.seekg(0);
-
-  for (std::size_t i = 0; i < mDatasetSize_; ++i) {
-    std::string key, val;
-    ReadFromFile(key, val);
-    mDataFile_.seekg(mRecordPosMap_.at(key));
+    mDataFile_.seekg(pos);
     ReadFromFile(key, val);
     cb(key, val);
   }
@@ -126,7 +119,7 @@ void TestDataset::ReadFromFile(std::string& key, std::string& val) {
 
   if ((header.keySize > mSingleStringMaxLength_)
   || (header.valSize > mSingleStringMaxLength_)) {
-    throw std::runtime_error("temp data file read failed");
+    throw std::runtime_error("key or val size too long");
   }
 
   key.resize(header.keySize);

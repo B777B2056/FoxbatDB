@@ -1,18 +1,19 @@
 #include "cron.h"
-#include "common/flags.h"
+#include <iostream>
+#include "flag/flags.h"
 #include "persistence/persistence.h"
 
 namespace foxbatdb {
   CronJobManager::CronJobManager()
-    : mIOContext_{},
-      mLogFlushTimer_{mIOContext_} {
+    : mIOContext_{}
+    , mAOFFlushTimer_{mIOContext_} {
     AddJobs();
     mCronThread_ = std::thread{[this] { mIOContext_.run(); }};
     Start();
   }
 
   CronJobManager::~CronJobManager() {
-    mLogFlushTimer_.Stop();
+    mAOFFlushTimer_.Stop();
     if (mCronThread_.joinable()) {
       mCronThread_.join();
     }
@@ -24,16 +25,17 @@ namespace foxbatdb {
   }
 
   void CronJobManager::AddJobs() {
-    mLogFlushTimer_.SetTimeoutHandler(
-      [this](const std::error_code& e) { 
+    mAOFFlushTimer_.SetTimeoutHandler(
+      [this]()->void {
         Persister::GetInstance().FlushToDisk();
       }
     );
   }
 
   void CronJobManager::Start() {
-    mLogFlushTimer_.Start(
-      std::chrono::milliseconds{Flags::GetInstance().logWriteCronJobPeriodMs});
+    mAOFFlushTimer_.Start(
+      std::chrono::milliseconds{Flags::GetInstance().logWriteCronJobPeriodMs}
+    );
   }
 
   void CronJobManager::Init() {

@@ -3,14 +3,13 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "common/common.h"
+#include "cmdmap.h"
 #include "errors/protocol.h"
 
 namespace foxbatdb {
   struct ParseResult {
     bool hasError : 2;
     bool isWriteCmd : 2;
-    TxState txState : 4;
     std::string errMsg;
     Command data;
     std::string cmdText;
@@ -44,16 +43,10 @@ namespace foxbatdb {
     void HandleParseError(std::error_code err);
     void HandleSyntaxError(std::error_code err);
     ParseResult BuildParseResult();
-    void SetResultTxState(const std::string& cmdText);
 
   public:
     RequestParser();
-
     bool IsParseFinished() const;
-    ParseResult ParseLine(std::string_view curLine);
-
-    static std::string Exec(CMDSessionPtr weak, const Command& cmd);
-    static std::tuple<bool, std::string> ExecWithErrorFlag(CMDSessionPtr weak,
-                                                           const Command& cmd);                                                                  
+    ParseResult ParseLine(std::string_view curLine);                                                                  
   };
 }

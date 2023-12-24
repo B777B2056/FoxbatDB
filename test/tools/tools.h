@@ -38,5 +38,4 @@ public:
   ~TestDataset();
   std::size_t Size() const;
   void Foreach(std::function<void(const std::string&,const std::string&)> cb);
-  void ForeachWithDuplicatedKey(std::function<void(const std::string&,const std::string&)> cb);
 };

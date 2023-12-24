@@ -1,15 +1,19 @@
 #pragma once
 #include <cstdint>
-#include "common/common.h"
+#include <memory>
+#include <string>
+#include <list>
+#include <unordered_map>
 
 namespace foxbatdb {
+  class CMDSession;
   class PubSubWithChannel {
   private:
-    PubSubChannelMap mChannelMap_;
+    std::unordered_map<std::string, std::list<std::weak_ptr<CMDSession>>> mChannelMap_;
 
   public:
-    void Subscribe(const BinaryString& channel, CMDSessionPtr weak);
-    void UnSubscribe(const BinaryString& channel, CMDSessionPtr weak);
-    std::int32_t Publish(const BinaryString& channel, const BinaryString& msg);
+    void Subscribe(const std::string& channel, std::weak_ptr<CMDSession> weak);
+    void UnSubscribe(const std::string& channel, std::weak_ptr<CMDSession> weak);
+    std::int32_t Publish(const std::string& channel, const std::string& msg);
   };
 }

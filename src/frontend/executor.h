@@ -1,31 +1,70 @@
 #pragma once
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <vector>
-#include "core/transaction.h"
+#include <memory>
+#include "cmdmap.h"
+#include "core/filemanager.h"
 
 namespace foxbatdb {
+  class Command;
+  class CMDSession;
   class Database;
   class ParseResult;
+
+  enum class TxState : std::int8_t {
+    kNoTx = 0,
+    kBegin,
+    kAppend,
+    kExec,
+    kDiscard,
+  };
+
   class CMDExecutor {
   private:
-    std::uint8_t mDBIdx_; 
-    Database* mDB_;
-    bool mIsInTxMode_ : 4 = false;
-    bool mIsTxFailed_ : 4 = false;
-    Transaction mTx_;
-    std::vector<BinaryString> mWatchedKeyList_;
+    struct TxUndoInfo {
+      std::uint64_t txID;
+      LogFileObjPtr dbFile;
+      std::streampos readpos;
+    };
 
-    void ClearWatchKey(CMDSessionPtr clt);
+    struct CommandInfo {
+      Command cmd;
+      bool isValidCmd;
+      std::string errmsg;
+    };
+
+  private:
+    Database* mDB_;
+    TxState mTxState_;
+    bool isTxFailedBefore_ = false;
+    std::deque<CommandInfo> mCmdQueue_;
+    std::vector<std::string> mWatchedKeyList_;
+    std::deque<TxUndoInfo> mTxUndo_;
+
+    void EnableTxMode();
+    void CancelTxMode();
+
+    static std::uint64_t GenerateGlobalTxID();
+    bool SetTxStateByCMD(const Command& cmd);
+
+    void ClearWatchKey();
+    std::string ExecTx(std::weak_ptr<CMDSession> weak);
+    void AppendUndoLog(const Command& cmd);
+    void RollbackTx();
+
+    static std::string Exec(std::weak_ptr<CMDSession> weak, const Command& cmd);
+    static std::tuple<bool, std::string> ExecWithErrorFlag(std::weak_ptr<CMDSession> weak,
+                                                           const Command& cmd);
 
   public:
     CMDExecutor();
     Database* CurrentDB();
-    std::uint8_t CurrentDBIdx() const;
     void SwitchToTargetDB(std::uint8_t dbIdx);
-    std::string DoExecOneCmd(CMDSessionPtr clt, const ParseResult& result);
-    void AddWatchKey(const BinaryString& key);
-    void DelWatchKey(const BinaryString& key);
+    std::string DoExecOneCmd(std::weak_ptr<CMDSession> weak, const ParseResult& result);
+    void AddWatchKey(const std::string& key);
+    void DelWatchKey(const std::string& key);
     void SetCurrentTxToFail();
   };
 }

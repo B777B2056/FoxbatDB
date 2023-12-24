@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
-#include "common/common.h"
-#include "common/flags.h"
+#include "flag/flags.h"
 #include "core/filemanager.h"
 #include "utils/resp.h"
 #include "tools/tools.h"
@@ -15,16 +14,11 @@ static std::string DuplicatedKeyGenerator() {
   static int count = 0;
   static std::string repeatedString;
 
-  if (count % 4 == 0) {
-      if (count == 0 || rand() % 2 == 0) {
-          repeatedString = GenRandomString(KEY_LENGTH);
-      }
-      count = 0;
-      return repeatedString;
-  } else {
-      ++count;
-      return GenRandomString(KEY_LENGTH);
+  ++count;
+  if (count % 4 != 0) {
+    repeatedString = GenRandomString(KEY_LENGTH);
   }
+  return repeatedString;
 }
 
 static void InsertIntoDBWithNoOption(CMDServerPtr cmdSession, const std::string& key, const std::string& val) {

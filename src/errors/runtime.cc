@@ -34,6 +34,9 @@ std::string RuntimeErrorCategory::message(int c) const {
     case RuntimeErrorCode::kWatchedKeyModified:
       return "Watched key has been modified by others";
 
+    case RuntimeErrorCode::kInvalidTxCmd:
+      return "Invalid tx command";
+
     default:
       return "Wrong Runtime Error Code";
   }

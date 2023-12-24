@@ -1,57 +1,43 @@
 #pragma once
 #include <list>
+#include <string>
 #include <unordered_map>
-#include "common/common.h"
 
 namespace foxbatdb {
-  class ValueObject;
+  class StorageEngine;
 
-  class MaxMemoryPolicyAdapter {
-   protected:
-    StorageImpl* storage;
-
+  class MaxMemoryStrategy {
   public:
-    MaxMemoryPolicyAdapter();
-    MaxMemoryPolicyAdapter(StorageImpl* dict);
-    virtual ~MaxMemoryPolicyAdapter() = default;
+    MaxMemoryStrategy() = default;
+    virtual ~MaxMemoryStrategy() = default;
 
-    void SetStorage(StorageImpl* dict);
-    void Foreach(ForeachCallback callback);
-
-    virtual void RemoveItem() = 0;
-    virtual bool IsEmpty() const = 0;
-    virtual void Put(const BinaryString& key,
-                     std::shared_ptr<ValueObject> val) = 0;
-    virtual void Del(const BinaryString& key) = 0;
-    virtual bool Contains(const BinaryString& key) const = 0;
-    virtual std::shared_ptr<ValueObject> Get(const BinaryString& key) const = 0;
+    virtual void UpdateStateForReadOp(const std::string& key) = 0;
+    virtual void UpdateStateForWriteOp(const std::string& key) = 0;
+    virtual void ReleaseKey(StorageEngine* engine) = 0;
+    virtual bool HaveMemoryAvailable() const = 0;
   };
 
-  class NoevictionAdapter : public MaxMemoryPolicyAdapter {
-   public:
-    void RemoveItem();
-    bool IsEmpty() const;
-    void Put(const BinaryString& key, std::shared_ptr<ValueObject> val);
-    void Del(const BinaryString& key);
-    bool Contains(const BinaryString& key) const;
-    std::shared_ptr<ValueObject> Get(const BinaryString& key) const;
+  class NoevictionStrategy : public MaxMemoryStrategy {
+  public:
+    using MaxMemoryStrategy::MaxMemoryStrategy;
+    void UpdateStateForReadOp(const std::string&) override;
+    void UpdateStateForWriteOp(const std::string&) override;
+    void ReleaseKey(StorageEngine*) override;
+    bool HaveMemoryAvailable() const override;
   };
 
-  class LRUAdapter : public MaxMemoryPolicyAdapter {
+  class LRUStrategy : public MaxMemoryStrategy {
   private:
-    mutable std::list<BinaryString> lruList;
-    mutable std::unordered_map<BinaryString, std::list<BinaryString>::iterator>
-       queryMap;
+    mutable std::list<std::string> lruList;
+    mutable std::unordered_map<std::string, std::list<std::string>::iterator> queryMap;
 
-    void Update(const BinaryString& key) const;
+    void Update(const std::string& key) const;
 
   public:
-    LRUAdapter();
-    void RemoveItem();
-    bool IsEmpty() const;
-    void Put(const BinaryString& key, std::shared_ptr<ValueObject> val);
-    void Del(const BinaryString& key);
-    bool Contains(const BinaryString& key) const;
-    std::shared_ptr<ValueObject> Get(const BinaryString& key) const;
+    using MaxMemoryStrategy::MaxMemoryStrategy;
+    void UpdateStateForReadOp(const std::string& key) override;
+    void UpdateStateForWriteOp(const std::string& key) override;
+    void ReleaseKey(StorageEngine* engine) override;
+    bool HaveMemoryAvailable() const override;
   };
 }

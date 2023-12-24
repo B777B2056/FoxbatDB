@@ -3,8 +3,8 @@
 #include <string>
 #include <thread>
 #include <random>
+#include <unordered_set>
 #include <gtest/gtest.h>
-#include "common/common.h"
 #include "errors/runtime.h"
 #include "utils/utils.h"
 #include "utils/resp.h"
@@ -115,4 +115,38 @@ TEST(SetGetTest, WithExOptionTimeout) {
         ++i;
     }
   );     
+}
+
+static void DeleteKeyFromDB(CMDServerPtr cmdSession, const std::string& key) {
+  static auto expectResp = utils::BuildResponse(1);
+  auto cmd = ::BuildCMD("del", {key});
+  EXPECT_EQ(cmdSession->DoExecOneCmd(cmd), expectResp);
+}
+
+TEST(SetGetTest, RandomDeleteKey) {
+  static int count = 0;
+  std::unordered_set<std::string> deletedKeySet;
+
+  TestDataset dataset{1024, 64, TimestampKeyGenerator};
+  auto cmdSession = ::GetMockCMDSession();
+  // 注入kv存储引擎
+  dataset.Foreach(
+    [cmdSession, &deletedKeySet](const std::string& key, const std::string& val)->void {
+      InsertIntoDBWithNoOption(cmdSession, key, val);
+      ++count;
+      if (count % 4 != 0) {
+        DeleteKeyFromDB(cmdSession, key);
+        deletedKeySet.insert(key);
+      }
+    }
+  );
+  // 从kv存储引擎读取并测试数据
+  dataset.Foreach(
+    [cmdSession, &deletedKeySet](const std::string& key, const std::string& val)->void {
+        if (deletedKeySet.end() == deletedKeySet.find(key))
+          ReadAndTestFromDB(cmdSession, key, val);
+        else
+          ReadAndTestNotExistFromDB(cmdSession, key);
+      }
+  );   
 }

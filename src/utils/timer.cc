@@ -37,12 +37,13 @@ namespace foxbatdb {
       }
 
       timer_.expires_from_now(timeout_ms);
-      timer_.async_wait([this, timeout_ms](const asio::error_code& e) {
-        if (e.value() == asio::error::operation_aborted ||
+      timer_.async_wait([this, timeout_ms](const asio::error_code& ec) {
+        if (ec.value() == asio::error::operation_aborted ||
             !is_running_.load()) {
           return;
         }
-        timeout_handler_(e);
+        if (!ec)
+          timeout_handler_();
         this->DoSetExpired(timeout_ms);
       });
     }

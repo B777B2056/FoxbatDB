@@ -1,7 +1,9 @@
 #pragma once
 #include <type_traits>
 #include <system_error>
-#include "common/common.h"
+#include <string>
+#include <vector>
+#include <utility>
 
 namespace foxbatdb {
   namespace detail {
@@ -9,8 +11,7 @@ namespace foxbatdb {
     void BuildBulkErrorResp(std::string& resp, std::error_code err);
     void BuildSimpleStringResp(std::string& resp, const char* data);
     void BuildSimpleStringResp(std::string& resp, const std::string& data);
-    void BuildSimpleStringResp(std::string& resp, const BinaryString& data);
-    void BuildBulkStringResp(std::string& resp, const BinaryString& data);
+    void BuildBulkStringResp(std::string& resp, const std::string& data);
     void BuildIntegerResp(std::string& resp, int val);
     void BuildBooleanResp(std::string& resp, bool val);
     void BuildDoubleResp(std::string& resp, double val);
@@ -45,8 +46,6 @@ namespace foxbatdb {
         } else if constexpr (std::is_bounded_array_v<T>) {
           BuildSimpleStringResp(resp, data);
         } else if constexpr (std::is_same_v<std::string, T>) {
-          BuildSimpleStringResp(resp, data);
-        } else if constexpr (std::is_same_v<BinaryString, T>) {
           BuildSimpleStringResp(resp, data);
         } else if constexpr (std::is_void_v<T>) {
           BuildNullResp(resp);

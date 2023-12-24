@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <memory>
 #include "cmd.h"
-#include "common/flags.h"
+#include "flag/flags.h"
 #include "asio/asio.hpp"
 
 namespace foxbatdb {

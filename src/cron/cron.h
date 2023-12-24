@@ -7,7 +7,7 @@ namespace foxbatdb {
   private:
     asio::io_context mIOContext_;
     std::thread mCronThread_;
-    utils::RepeatedTimer mLogFlushTimer_;
+    utils::RepeatedTimer mAOFFlushTimer_;
 
     CronJobManager();
     void AddJobs();

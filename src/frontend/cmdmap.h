@@ -1,10 +1,37 @@
 #pragma once
-#include "core/db.h"
 #include <climits>
 #include <unordered_set>
 #include <unordered_map>
+#include "core/db.h"
 
 namespace foxbatdb {
+  enum class CmdOptionType : std::uint8_t { 
+    kEX = 1, 
+    kPX, 
+    kNX, 
+    kXX, 
+    kKEEPTTL, 
+    kGET, 
+    kTODO 
+  };
+
+  struct CommandOption {
+    std::string name;
+    CmdOptionType type;
+    std::vector<std::string> argv;
+  };
+
+  struct Command;
+  class CMDSession;
+  using CmdProcFunc = ProcResult (*)(std::weak_ptr<CMDSession>, const Command&);
+
+  struct Command {
+    std::string name;
+    CmdProcFunc call;
+    std::vector<std::string> argv;
+    std::vector<CommandOption> options;
+  };
+
   namespace detail {
     struct MainCommandWrapper {
       CmdProcFunc call;

@@ -1,4 +1,5 @@
 #include "resp.h"
+#include <cmath>
 
 namespace foxbatdb {
   namespace detail {
@@ -31,13 +32,9 @@ namespace foxbatdb {
       BuildResponseHelper(resp, '+', data);
     }
 
-    void BuildSimpleStringResp(std::string& resp, const BinaryString& data) {
-      BuildResponseHelper(resp, '+', data.ToTextString());
-    }
-
-    void BuildBulkStringResp(std::string& resp, const BinaryString& data) {
-      BuildResponseHelper(resp, '!', std::to_string(data.Length()));
-      BuildResponseHelper(resp, data.ToTextString());
+    void BuildBulkStringResp(std::string& resp, const std::string& data) {
+      BuildResponseHelper(resp, '!', std::to_string(data.length()));
+      BuildResponseHelper(resp, data);
     }
 
     void BuildIntegerResp(std::string& resp, int val) {

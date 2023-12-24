@@ -1,14 +1,13 @@
 #include "db.h"
 #include <filesystem>
 #include <iostream>
-#include "common/flags.h"
+#include "flag/flags.h"
 #include "errors/protocol.h"
 #include "errors/runtime.h"
-#include "filemanager.h"
-#include "obj.h"
-#include "memory.h"
+#include "frontend/cmdmap.h"
 #include "network/cmd.h"
-#include "utils/resp.h"
+#include "memory.h"
+#include "utils/utils.h"
 
 namespace foxbatdb {
   ProcResult MakeProcResult(std::error_code err) {
@@ -23,20 +22,20 @@ namespace foxbatdb {
     return MakeProcResult("OK");
   }
 
-  ProcResult CommandDB(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult CommandDB(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     return OKResp();
   }
 
-  ProcResult InfoDB(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult InfoDB(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     return OKResp();
   }
 
-  ProcResult ServerDB(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult ServerDB(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     return OKResp();
   }
 
-  ProcResult SwitchDB(CMDSessionPtr weak, const Command& cmd) {
-    auto idx = cmd.argv.back().ToInteger<std::size_t>();
+  ProcResult SwitchDB(std::weak_ptr<CMDSession> weak, const Command& cmd) {
+    auto idx = utils::ToInteger<std::size_t>(cmd.argv.back());
     if (!idx.has_value()) {
       return MakeProcResult(error::ProtocolErrorCode::kSyntax);
     }
@@ -52,7 +51,7 @@ namespace foxbatdb {
     }
   }
 
-  ProcResult Load(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult Load(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     if (DatabaseManager::GetInstance().IsInReadonlyMode()) {
       return MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
     }
@@ -60,7 +59,7 @@ namespace foxbatdb {
     int cnt = 0;
     auto& dbm = DatabaseManager::GetInstance();
     for (const auto& path : cmd.argv) {
-      if (dbm.LoadRecordsFromLogFile(path.ToTextString())) {
+      if (dbm.LoadRecordsFromLogFile(path)) {
         ++cnt;
       }
     }
@@ -68,7 +67,7 @@ namespace foxbatdb {
     return MakeProcResult(cnt);
   }
 
-  ProcResult StrSet(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult StrSet(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     if (DatabaseManager::GetInstance().IsInReadonlyMode()) {
       return MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
     }
@@ -82,7 +81,7 @@ namespace foxbatdb {
     }
 
     auto* db = clt->CurrentDB();
-    auto [err, data] = db->StrSet(clt->CurrentDBIdx(), key, val, cmd.options);
+    auto [err, data] = db->StrSet(key, val, cmd.options);
     if (err) {
       return MakeProcResult(err);
     } else if (data.has_value()) {
@@ -92,7 +91,7 @@ namespace foxbatdb {
     }
   }
 
-  ProcResult StrGet(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult StrGet(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -101,14 +100,14 @@ namespace foxbatdb {
     auto& key = cmd.argv[0];
     auto* db = clt->CurrentDB();
     auto val = db->StrGet(key);
-    if (!val.has_value() || val->IsEmpty()) {
+    if (!val.has_value() || val->empty()) {
       return MakeProcResult(error::RuntimeErrorCode::kKeyNotFound);
     }
 
     return MakeProcResult(*val);
   }
 
-  ProcResult Del(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult Del(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -123,29 +122,28 @@ namespace foxbatdb {
     return MakeProcResult(cnt);
   }
 
-  ProcResult Watch(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult Watch(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
     auto* db = clt->CurrentDB();
-    db->AddWatch(cmd.argv[0], weak);
+    db->AddWatchKeyWithClient(cmd.argv[0], weak);
     return OKResp();
   }
 
-  ProcResult UnWatch(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult UnWatch(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
     }
 
-    auto* db = clt->CurrentDB();
-    db->DelWatch(cmd.argv[0], weak);
+    clt->DelWatchKey(cmd.argv[0]);
     return OKResp();
   }
 
-  ProcResult PublishWithChannel(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult PublishWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -157,7 +155,7 @@ namespace foxbatdb {
     return MakeProcResult(cnt);
   }
 
-  ProcResult SubscribeWithChannel(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult SubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -169,14 +167,14 @@ namespace foxbatdb {
     for (std::size_t i = 0; i < cmd.argv.size(); ++i) {
       dbm.SubscribeWithChannel(cmd.argv[i], weak);
       result.emplace_back(cmd.name);
-      result.emplace_back(cmd.argv[i].ToTextString());
+      result.emplace_back(cmd.argv[i]);
       result.emplace_back(std::to_string(i+1));
     }
 
     return MakePubSubProcResult(result);
   }
 
-  ProcResult UnSubscribeWithChannel(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult UnSubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -188,7 +186,7 @@ namespace foxbatdb {
     return OKResp();
   }
 
-  ProcResult Merge(CMDSessionPtr weak, const Command& cmd) {
+  ProcResult Merge(std::weak_ptr<CMDSession> weak, const Command& cmd) {
     auto clt = weak.lock();
     if (!clt) {
       return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
@@ -200,10 +198,15 @@ namespace foxbatdb {
   }
 
   DatabaseManager::DatabaseManager()
-      : mIsNonWrite_{false},
-        mDBList_{Flags::GetInstance().dbMaxNum} {}
+      : mIsNonWrite_{false}
+      , mMaxMemoryStrategy_{new LRUStrategy()} {
+    for (std::uint8_t i = 0; i < Flags::GetInstance().dbMaxNum; ++i) {
+      Database db{i, mMaxMemoryStrategy_};
+      mDBList_.push_back(std::move(db));
+    }
+  }
 
-  DatabaseManager::~DatabaseManager() {}
+  DatabaseManager::~DatabaseManager() { delete mMaxMemoryStrategy_; }
 
   DatabaseManager& DatabaseManager::GetInstance() {
     static DatabaseManager inst;
@@ -211,7 +214,7 @@ namespace foxbatdb {
   }
 
   void DatabaseManager::Init() {
-
+    return;
   }
 
   bool DatabaseManager::LoadRecordsFromLogFile(const std::string& path) {
@@ -226,14 +229,14 @@ namespace foxbatdb {
 
     while (!file.eof()) {
       FileRecord record;
-      if (!record.LoadFromDisk(file, file.tellg())) continue;
+      if (!FileRecord::LoadFromDisk(record, file, file.tellg())) continue;
 
       Database* db = GetDBByIndex(record.header.dbIdx);
-      BinaryString& key = record.data.key;
-      BinaryString& val = record.data.value;
+      auto& key = record.data.key;
+      auto& val = record.data.value;
 
-      if (val.Length())
-        db->StrSet(record.header.dbIdx, key, val);
+      if (val.length())
+        db->StrSet(key, val);
       else
         db->Del(key);
     }
@@ -277,73 +280,66 @@ namespace foxbatdb {
     return &mDBList_[idx];
   }
 
-  void DatabaseManager::SubscribeWithChannel(const BinaryString& channel,
-    CMDSessionPtr weak) {
+  void DatabaseManager::SubscribeWithChannel(const std::string& channel,
+    std::weak_ptr<CMDSession> weak) {
     mPubSubChannel_.Subscribe(channel, weak);
   }
 
-  void DatabaseManager::UnSubscribeWithChannel(const BinaryString& channel,
-                                               CMDSessionPtr weak) {
+  void DatabaseManager::UnSubscribeWithChannel(const std::string& channel,
+                                               std::weak_ptr<CMDSession> weak) {
     mPubSubChannel_.UnSubscribe(channel, weak);
   }
 
-  std::int32_t DatabaseManager::PublishWithChannel(const BinaryString& channel,
-    const BinaryString& msg) {
+  std::int32_t DatabaseManager::PublishWithChannel(const std::string& channel,
+                                                   const std::string& msg) {
     return mPubSubChannel_.Publish(channel, msg);
   }
 
-  Database::Database() : mEngine_{new LRUAdapter()} {
-    mEngine_->SetStorage(&mStorage_);
-  }
-
-  Database::~Database() {
-    delete mEngine_;
-  }
+  Database::Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy) 
+    : mEngine_{dbIdx, maxMemoryStrategy} {}
 
   void Database::ReleaseMemory() {
-    mEngine_->RemoveItem();
+    mEngine_.ReleaseMemory();
   }
 
   bool Database::HaveMemoryAvailable() const {
-    return mEngine_->IsEmpty();
+    return mEngine_.HaveMemoryAvailable();
   }
 
-  void Database::Foreach(ForeachCallback callback) { 
-    mEngine_->Foreach(callback);
+  void Database::Foreach(StorageEngine::ForeachCallback callback) {
+    mEngine_.Foreach(callback);
   }
 
-  void Database::NotifyWatchedClientSession(const BinaryString& key) {
-    if (mWatchedMap_.Contains(key)) {
-      for (const auto& weak : *(mWatchedMap_.GetRef(key))) {
+  void Database::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) {
+    mEngine_.InsertTxFlag(txFlag, txCmdNum);
+  }
+
+  void Database::NotifyWatchedClientSession(const std::string& key) {
+    if (mWatchedMap_.contains(key)) {
+      for (const auto& weak : mWatchedMap_.at(key)) {
         if (auto clt = weak.lock(); clt) {
           clt->SetCurrentTxToFail();
         }
       }
     }
   }
-  void Database::StrSetForHistoryData(std::fstream& file, std::streampos pos,
+  void Database::StrSetForHistoryData(LogFileObjPtr file, std::streampos pos,
                                       const FileRecord& record) {
-    auto obj = ValueObject::NewForHistory(file, pos, record);
-    if (!obj) {
-      return;
-    }
-    mEngine_->Put(record.data.key, obj);
+    mEngine_.PutForHistoryData(file, pos, record.header.timestamp, record.data.key);
   }
 
-  std::tuple<std::error_code, std::optional<BinaryString>> Database::StrSet(
-      std::uint8_t dbIdx, 
-      const BinaryString& key, const BinaryString& val,
+  std::tuple<std::error_code, std::optional<std::string>> Database::StrSet(
+      const std::string& key, const std::string& val,
       const std::vector<CommandOption>& opts) {
-    auto obj = ValueObject::New(dbIdx, key, val);
-    if (!obj) {
-      // TODO：内存耗尽
-      return std::make_tuple(error::RuntimeErrorCode::kMemoryOut,
-                              std::nullopt);
+    std::error_code ec;
+    auto obj = mEngine_.Put(ec, key, val);
+    if (ec) {
+      return std::make_tuple(ec, std::nullopt);
     }
     
-    std::optional<BinaryString> data = std::nullopt;
+    std::optional<std::string> data = std::nullopt;
     for (const auto& opt : opts) {
-      auto [err, payload] = StrSetWithOption(key, *obj, opt);
+      auto [err, payload] = StrSetWithOption(key, *(obj.lock()), opt);
       if (err) {
         return std::make_tuple(err, std::nullopt);
       }
@@ -352,29 +348,22 @@ namespace foxbatdb {
       }
     }
     NotifyWatchedClientSession(key);
-    mEngine_->Put(key, obj);
     return std::make_tuple(error::ProtocolErrorCode::kSuccess, data);
   }
 
-  void Database::StrSetForMerge(std::fstream& mergeFile, std::uint8_t dbIdx,
-                                const BinaryString& key,
-                                const BinaryString& val) {
-    auto obj = ValueObject::NewForMerge(mergeFile, dbIdx, key, val);
-    if (!obj) {
-      // TODO：内存耗尽
-      return;
-    }
-    mEngine_->Put(key, obj);
+  void Database::StrSetForMerge(LogFileObjPtr mergeFile, 
+                                const std::string& key, const std::string& val) {
+    mEngine_.PutForMerge(mergeFile, key, val);
   }
 
-  std::tuple<std::error_code, std::optional<BinaryString>>
-  Database::StrSetWithOption(const BinaryString& key, ValueObject& obj,
+  std::tuple<std::error_code, std::optional<std::string>>
+  Database::StrSetWithOption(const std::string& key, ValueObject& obj,
                              const CommandOption& opt) {
     std::error_code err = error::RuntimeErrorCode::kSuccess;
-    std::optional<BinaryString> data = std::nullopt;
+    std::optional<std::string> data = std::nullopt;
     switch (opt.type) {
       case CmdOptionType::kEX: {
-        auto sec = opt.argv.front().ToInteger<std::int64_t>();
+        auto sec = utils::ToInteger<std::int64_t>(opt.argv.front());
         if (!sec.has_value()) {
           err = error::ProtocolErrorCode::kSyntax;
         } else {
@@ -382,7 +371,7 @@ namespace foxbatdb {
         }
       } break;
       case CmdOptionType::kPX: {
-        auto ms = opt.argv.front().ToInteger<std::int64_t>();
+        auto ms = utils::ToInteger<std::int64_t>(opt.argv.front());
         if (!ms.has_value()) {
           err = error::ProtocolErrorCode::kSyntax;
         } else {
@@ -390,25 +379,25 @@ namespace foxbatdb {
         }
       } break;
       case CmdOptionType::kNX:
-        if (mEngine_->Contains(key)) {
+        if (mEngine_.Contains(key)) {
           err = error::RuntimeErrorCode::kKeyAlreadyExist;
         }
         break;
       case CmdOptionType::kXX:
-        if (!mEngine_->Contains(key)) {
+        if (!mEngine_.Contains(key)) {
           err = error::RuntimeErrorCode::kKeyNotFound;
         }
         break;
       case CmdOptionType::kKEEPTTL:
         // 保留设置前指定键的生存时间
-        if (mEngine_->Contains(key)) {
-          auto oldObj = mEngine_->Get(key);
-          obj.SetExpiration(oldObj->GetExpiration());
+        if (mEngine_.Contains(key)) {
+          auto oldObj = mEngine_.Get(key);
+          obj.SetExpiration(oldObj.lock()->GetExpiration());
         }
         break;
       case CmdOptionType::kGET:
         // 返回 key 存储的值，如果 key 不存在返回空
-        if (mEngine_->Contains(key)) {
+        if (mEngine_.Contains(key)) {
           data = StrGet(key);
         } else {
           data = {"nil"};
@@ -420,49 +409,39 @@ namespace foxbatdb {
     return std::make_tuple(err, data);
   }
 
-  std::optional<BinaryString> Database::StrGet(const BinaryString& key) {
-    auto obj = mEngine_->Get(key);
-    if (!obj) {
+  std::optional<std::string> Database::StrGet(const std::string& key) {
+    std::error_code ec;
+    auto val = mEngine_.Get(ec, key);
+    if (ec) {
       return {};
     }
-    if (obj->IsExpired()) {
-      obj->DeleteValue(key);
-      Del(key);
-      return {};
-    }
-    return obj->GetValue();
+    return val;
   }
 
-  std::error_code Database::Del(const BinaryString& key) {
+  std::error_code Database::Del(const std::string& key) {
     NotifyWatchedClientSession(key);
-    mEngine_->Get(key)->DeleteValue(key);
-    mEngine_->Del(key);
-    return error::RuntimeErrorCode::kSuccess;
+    return mEngine_.Del(key);
   }
 
-  void Database::AddWatch(const BinaryString& key, CMDSessionPtr clt) {
-    if (!mEngine_->Contains(key))
+  std::weak_ptr<ValueObject> Database::Get(const std::string& key) {
+    return mEngine_.Get(key);
+  }
+
+  void Database::AddWatchKeyWithClient(const std::string& key, std::weak_ptr<CMDSession> clt) {
+    if (!mEngine_.Contains(key))
       return;
 
     auto cltPtr = clt.lock();
     if (!cltPtr) 
       return;
     cltPtr->AddWatchKey(key);
-
-    if (!mWatchedMap_.Contains(key)) {
-      mWatchedMap_.Add(key, {});
-    }
-    mWatchedMap_.GetRef(key)->emplace_back(clt);
+    mWatchedMap_[key].emplace_back(clt);
+    return;
   }
 
-  void Database::DelWatch(const BinaryString& key, CMDSessionPtr clt) {
-    if (!mEngine_->Contains(key))
+  void Database::DelWatchKeyAndClient(const std::string& key) {
+    if (!mEngine_.Contains(key))
       return;
-
-    auto cltPtr = clt.lock();
-    if (!cltPtr)
-      return;
-    cltPtr->DelWatchKey(key);
-    mWatchedMap_.Del(key);
+    mWatchedMap_.erase(key);
   }
 }

@@ -3,7 +3,7 @@
 #include "core/db.h"
 #include "core/filemanager.h"
 #include "cron/cron.h"
-#include "common/flags.h"
+#include "flag/flags.h"
 #include "network/access.h"
 
 using namespace foxbatdb;
@@ -35,6 +35,6 @@ void InitComponents() {
 int main(int argc, char **argv) {
   InitComponents();
   testing::InitGoogleTest(&argc, argv);
-  ::testing::GTEST_FLAG(filter) = "MergeTest.*";
+  ::testing::GTEST_FLAG(filter) = "TxTest.*";
   return RUN_ALL_TESTS();
 }

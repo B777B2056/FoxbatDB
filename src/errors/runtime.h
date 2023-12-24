@@ -13,7 +13,8 @@ enum class RuntimeErrorCode {
   kAlreadyInTx,
   kNotInTx,
   kTxError,
-  kWatchedKeyModified
+  kWatchedKeyModified,
+  kInvalidTxCmd
 };
 
 class RuntimeErrorCategory : public std::error_category {

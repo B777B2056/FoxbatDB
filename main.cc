@@ -3,7 +3,7 @@
 #include "core/db.h"
 #include "core/filemanager.h"
 #include "cron/cron.h"
-#include "common/flags.h"
+#include "flag/flags.h"
 #include "network/access.h"
 
 static std::string flagConfPath;

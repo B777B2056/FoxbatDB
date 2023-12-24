@@ -1,5 +1,5 @@
 #include "persistence.h"
-#include "common/flags.h"
+#include "flag/flags.h"
 
 namespace foxbatdb {
   Persister::Persister()

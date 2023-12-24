@@ -4,7 +4,6 @@
 #include <charconv>
 #include <cmath>
 #include <unordered_map>
-#include "cmdmap.h"
 #include "core/db.h"
 #include "utils/resp.h"
 
@@ -22,7 +21,7 @@ namespace foxbatdb {
     , mParamCnt_{0}
     , mParamNum_{0}
     , mCurParamLen_{0}
-    , mResult_{.hasError=false, .txState=TxState::kInvalid}
+    , mResult_{.hasError=false}
     , mParseError_{error::ProtocolErrorCode::kSuccess}
     , mSyntaxError_{error::ProtocolErrorCode::kSuccess} {
 
@@ -100,7 +99,6 @@ namespace foxbatdb {
           mResult_.data.name = cmdStr;
           mResult_.data.call = info.call;
           mResult_.isWriteCmd = info.isWriteCmd;
-          SetResultTxState(cmdStr);
           // 状态转移
           mCommandState_ = CommandParseState::kMainArgv;
         } else {
@@ -205,30 +203,5 @@ namespace foxbatdb {
     }
 
     return ret;
-  }
-
-  void RequestParser::SetResultTxState(const std::string& cmdText) {
-    if (cmdText == "multi") {
-      mResult_.txState = TxState::kBegin;
-    } else if (cmdText == "exec") {
-      mResult_.txState = TxState::kExec;
-    } else if (cmdText == "discard") {
-      mResult_.txState = TxState::kDiscard;
-    } else {
-      mResult_.txState = TxState::kInvalid;
-    }
-  }
-
-  std::string RequestParser::Exec(CMDSessionPtr weak, const Command& cmd) {
-    auto [_, data] = ExecWithErrorFlag(weak, cmd);
-    return data;
-  }
-
-  std::tuple<bool, std::string> RequestParser::ExecWithErrorFlag(
-    CMDSessionPtr weak, const Command& cmd) {
-    // 根据命令和对应参数，执行命令
-    ProcResult result = (*(cmd.call))(weak, cmd);
-    // 根据执行结果构造响应对象
-    return {result.hasError, result.data};
   }
 }

@@ -1,20 +1,18 @@
 #pragma once
 #include <cstddef>
-#include <deque>
-#include <functional>
 #include <string>
-#include <vector>
 #include <tuple>
 #include <memory>
-#include "common/common.h"
-#include "data_structure/dict.h"
+#include "engine.h"
 #include "pubsub.h"
 #include "utils/resp.h"
 
 namespace foxbatdb {
+  class CMDSession;
+  class Command;
+  class CommandOption;
   class Database;
-  class ValueObject;
-  class MaxMemoryPolicyAdapter;
+  class MaxMemoryStrategy;
 
   struct ProcResult {
     bool hasError;
@@ -32,24 +30,25 @@ namespace foxbatdb {
 
   ProcResult OKResp();
 
-  ProcResult CommandDB(CMDSessionPtr weak, const Command& cmd);
-  ProcResult InfoDB(CMDSessionPtr weak, const Command& cmd);
-  ProcResult ServerDB(CMDSessionPtr weak, const Command& cmd);
-  ProcResult SwitchDB(CMDSessionPtr weak, const Command& cmd);
-  ProcResult Load(CMDSessionPtr weak, const Command& cmd);
-  ProcResult StrSet(CMDSessionPtr weak, const Command& cmd);
-  ProcResult StrGet(CMDSessionPtr weak, const Command& cmd);
-  ProcResult Del(CMDSessionPtr weak, const Command& cmd);
-  ProcResult Watch(CMDSessionPtr weak, const Command& cmd);
-  ProcResult UnWatch(CMDSessionPtr weak, const Command& cmd);
-  ProcResult PublishWithChannel(CMDSessionPtr weak, const Command& cmd);
-  ProcResult SubscribeWithChannel(CMDSessionPtr weak, const Command& cmd);
-  ProcResult UnSubscribeWithChannel(CMDSessionPtr weak, const Command& cmd);
-  ProcResult Merge(CMDSessionPtr weak, const Command& cmd);
+  ProcResult CommandDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult InfoDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult ServerDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult SwitchDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult Load(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult StrSet(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult StrGet(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult Del(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult Watch(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult UnWatch(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult PublishWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult SubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult UnSubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd);
+  ProcResult Merge(std::weak_ptr<CMDSession> weak, const Command& cmd);
 
   class DatabaseManager {
    private:
     bool mIsNonWrite_;
+    MaxMemoryStrategy* mMaxMemoryStrategy_;
     std::vector<Database> mDBList_;
     PubSubWithChannel mPubSubChannel_;
 
@@ -68,44 +67,49 @@ namespace foxbatdb {
     std::size_t GetDBListSize() const;
     Database* GetDBByIndex(std::size_t idx);
 
-    void SubscribeWithChannel(const BinaryString& channel, CMDSessionPtr weak);
-    void UnSubscribeWithChannel(const BinaryString& channel,
-                                CMDSessionPtr weak);
-    std::int32_t PublishWithChannel(const BinaryString& channel,
-                                    const BinaryString& msg);
+    void SubscribeWithChannel(const std::string& channel, std::weak_ptr<CMDSession> weak);
+    void UnSubscribeWithChannel(const std::string& channel,
+                                std::weak_ptr<CMDSession> weak);
+    std::int32_t PublishWithChannel(const std::string& channel,
+                                    const std::string& msg);
   };
 
   class Database {
   private:
-    StorageImpl mStorage_;
-    MaxMemoryPolicyAdapter* mEngine_;
-    WatchedKeyMap mWatchedMap_;
+    StorageEngine mEngine_;
+    std::unordered_map<std::string, std::vector<std::weak_ptr<CMDSession>>> mWatchedMap_;
 
-    std::tuple<std::error_code, std::optional<BinaryString>> StrSetWithOption(
-      const BinaryString& key, ValueObject& obj, const CommandOption& opt);
+    std::tuple<std::error_code, std::optional<std::string>> StrSetWithOption(
+      const std::string& key, ValueObject& obj, const CommandOption& opt);
 
-    void NotifyWatchedClientSession(const BinaryString& key);
+    void NotifyWatchedClientSession(const std::string& key);
         
   public:
-    Database();
-    ~Database();
+    Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy);
+    Database(const Database&) = delete;
+    Database& operator=(const Database&) = delete;
+    Database(Database&&) = default;
+    Database& operator=(Database&&) = default;
+    ~Database() = default;
 
     void ReleaseMemory();
     bool HaveMemoryAvailable() const;
 
-    void Foreach(ForeachCallback callback);
+    void Foreach(StorageEngine::ForeachCallback callback);
+    void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
 
-    void StrSetForHistoryData(std::fstream& file, std::streampos pos,
+    void StrSetForHistoryData(LogFileObjPtr file, std::streampos pos,
                               const FileRecord& record);
-    std::tuple<std::error_code, std::optional<BinaryString>> StrSet(
-        std::uint8_t dbIdx,
-        const BinaryString& key, const BinaryString& val,
+    std::tuple<std::error_code, std::optional<std::string>> StrSet(
+        const std::string& key, const std::string& val,
         const std::vector<CommandOption>& opts = {});
-    void StrSetForMerge(std::fstream& mergeFile, std::uint8_t dbIdx,
-                        const BinaryString& key, const BinaryString& val);
-    std::optional<BinaryString> StrGet(const BinaryString& key);
-    std::error_code Del(const BinaryString& key);
-    void AddWatch(const BinaryString& key, CMDSessionPtr clt);
-    void DelWatch(const BinaryString& key, CMDSessionPtr clt);
+    void StrSetForMerge(LogFileObjPtr mergeFile,
+                        const std::string& key, const std::string& val);
+    std::optional<std::string> StrGet(const std::string& key);
+    std::error_code Del(const std::string& key);
+    std::weak_ptr<ValueObject> Get(const std::string& key);
+
+    void AddWatchKeyWithClient(const std::string& key, std::weak_ptr<CMDSession> clt);
+    void DelWatchKeyAndClient(const std::string& key);
   };
 }
