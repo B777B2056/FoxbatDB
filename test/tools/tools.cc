@@ -2,8 +2,34 @@
 #include <filesystem>
 #include <random>
 #include <system_error>
+#include "core/db.h"
+#include "log/datalog.h"
+#include "cron/cron.h"
+#include "flag/flags.h"
 #include "frontend/cmdmap.h"
 #include "frontend/parser.h"
+
+void OutOfMemoryHandler() {
+  // 所有DB进入不允许写入状态，只响应非写入命令
+  foxbatdb::DatabaseManager::GetInstance().SetNonWrite();
+}
+
+void MemoryAllocRetryFunc() {
+  auto& dbm = foxbatdb::DatabaseManager::GetInstance();
+  if (dbm.HaveMemoryAvailable()) {
+    dbm.ScanDBForReleaseMemory();
+  } else {
+    OutOfMemoryHandler();
+  }
+}
+
+void InitComponents(const std::string& flagConfPath) {
+  std::set_new_handler(MemoryAllocRetryFunc);
+  foxbatdb::Flags::GetInstance().Init(flagConfPath);
+  foxbatdb::DatabaseManager::GetInstance().Init();
+  foxbatdb::DataLogFileManager::GetInstance().Init();
+  foxbatdb::CronJobManager::GetInstance().Init();
+}
 
 std::shared_ptr<foxbatdb::CMDSession> GetMockCMDSession() {
   static asio::io_context ioContext;

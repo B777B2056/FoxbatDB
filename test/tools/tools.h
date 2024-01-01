@@ -1,11 +1,16 @@
 #pragma once
 #include <fstream>
 #include <functional>
+#include <new>
 #include <memory>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include "frontend/server.h"
+
+void OutOfMemoryHandler();
+void MemoryAllocRetryFunc();
+void InitComponents(const std::string& flagConfPath);
 
 std::shared_ptr<foxbatdb::CMDSession> GetMockCMDSession();
 std::string GenRandomString(std::size_t length);
