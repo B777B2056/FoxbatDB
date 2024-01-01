@@ -1,0 +1,16 @@
+
+[submodule "3rdparty/spdlog"]
+	path = 3rdparty/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "3rdparty/asio"]
+	path = 3rdparty/asio
+	url = https://github.com/chriskohlhoff/asio.git
+[submodule "3rdparty/cmdline"]
+	path = 3rdparty/cmdline
+	url = https://github.com/tanakh/cmdline.git
+[submodule "3rdparty/toml++"]
+	path = 3rdparty/toml++
+	url = https://github.com/marzer/tomlplusplus.git
+[submodule "3rdparty/hat-trie"]
+	path = 3rdparty/hat-trie
+	url = https://github.com/Tessil/hat-trie.git

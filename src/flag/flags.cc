@@ -1,5 +1,5 @@
 #include "flags.h"
-#include "toml++/toml.hpp"
+#include "toml.hpp"
 
 namespace foxbatdb {
   Flags& Flags::GetInstance() {
