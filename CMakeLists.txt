@@ -18,6 +18,7 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/asio/asio/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/cmdline")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/hat-trie/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/spdlog/include")
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tinyfsm/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/toml++")
 
 file(GLOB_RECURSE SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
