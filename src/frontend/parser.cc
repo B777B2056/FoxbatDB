@@ -9,7 +9,7 @@
 
 namespace foxbatdb {
   static std::string ToLowerString(std::string_view str) {
-  std::string ret{str.begin(), str.end()};
+    std::string ret{str.begin(), str.end()};
     std::transform(str.begin(), str.end(), ret.begin(),
                    [](unsigned char c) { return std::tolower(c); });
     return ret;

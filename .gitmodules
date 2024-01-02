@@ -14,7 +14,3 @@
 [submodule "3rdparty/hat-trie"]
 	path = 3rdparty/hat-trie
 	url = https://github.com/Tessil/hat-trie.git
-[submodule "3rdparty/tinyfsm"]
-	path = 3rdparty/tinyfsm
-	url = https://github.com/digint/tinyfsm.git
-	branch = master
