@@ -4,60 +4,60 @@
 #include "frontend/parser.h"
 
 namespace foxbatdb {
-class Database;
+    class Database;
 
-class CMDSession : public std::enable_shared_from_this<CMDSession> {
- public:
-  CMDSession(asio::ip::tcp::socket socket);
-  CMDSession(const CMDSession&) = delete;
-  CMDSession(CMDSession&&) = default;
-  ~CMDSession() = default;
+    class CMDSession : public std::enable_shared_from_this<CMDSession> {
+    public:
+        explicit CMDSession(asio::ip::tcp::socket socket);
+        CMDSession(const CMDSession&) = delete;
+        CMDSession(CMDSession&&) = delete;
+        ~CMDSession() = default;
 
-  CMDSession& operator=(const CMDSession&) = delete;
-  CMDSession& operator=(CMDSession&&) = default;
+        CMDSession& operator=(const CMDSession&) = delete;
+        CMDSession& operator=(CMDSession&&) = delete;
 
-  void Start();
+        void Start();
 
-  Database* CurrentDB();
-  void SwitchToTargetDB(std::uint8_t dbIdx);
+        Database* CurrentDB();
+        void SwitchToTargetDB(std::uint8_t dbIdx);
 
-  void AddWatchKey(const std::string& key);
-  void DelWatchKey(const std::string& key);
-  void SetCurrentTxToFail();
+        void AddWatchKey(const std::string& key);
+        void DelWatchKey(const std::string& key);
+        void SetCurrentTxToFail();
 
-  void WritePublishMsg(const std::string& channel, const std::string& msg);
+        void WritePublishMsg(const std::string& channel, const std::string& msg);
 
 #ifdef _FOXBATDB_SELF_TEST
-  std::string DoExecOneCmd(const ParseResult& result);
+        std::string DoExecOneCmd(const ParseResult& result);
 #endif
 
-private:
-  asio::ip::tcp::socket mSocket_;
-  asio::streambuf mReadBuffer_;
-  RequestParser mParser_;
-  CMDExecutor mExecutor_;
+    private:
+        asio::ip::tcp::socket mSocket_;
+        asio::streambuf mReadBuffer_;
+        RequestParser mParser_;
+        CMDExecutor mExecutor_;
 
-  void DoRead();
-  void DoWrite(const std::string& data);
-  void ProcessMsg(std::size_t length);
-};
+        void DoRead();
+        void DoWrite(const std::string& data);
+        void ProcessMsg();
+    };
 
-class DBServer {
- public:
-  DBServer(const DBServer&) = delete;
-  DBServer& operator=(const DBServer&) = delete;
-  DBServer(DBServer&&) = default;
-  DBServer& operator=(DBServer&&) = default;
-  ~DBServer() = default;
+    class DBServer {
+    public:
+        DBServer(const DBServer&) = delete;
+        DBServer& operator=(const DBServer&) = delete;
+        DBServer(DBServer&&) = default;
+        DBServer& operator=(DBServer&&) = default;
+        ~DBServer() = default;
 
-  static DBServer& GetInstance();
-  void Run();
+        static DBServer& GetInstance();
+        void Run();
 
- private:
-  asio::io_context mIOContext_;
-  asio::ip::tcp::acceptor mAcceptor_;
+    private:
+        asio::io_context mIOContext_;
+        asio::ip::tcp::acceptor mAcceptor_;
 
-  DBServer();
-  void DoAccept();
-};
-}  // namespace foxbatdb
+        DBServer();
+        void DoAccept();
+    };
+}// namespace foxbatdb

@@ -1,52 +1,129 @@
 ﻿#pragma once
+#include "cmdmap.h"
+#include "errors/protocol.h"
 #include <cstddef>
 #include <string>
 #include <string_view>
 #include <vector>
-#include "cmdmap.h"
-#include "errors/protocol.h"
 
 namespace foxbatdb {
-  struct ParseResult {
-    bool hasError : 2;
-    bool isWriteCmd : 2;
-    std::string errMsg;
-    Command data;
-    std::string cmdText;
-  };
+    class RequestParser;
 
-  class RequestParser {
-  private:
-    enum class ProtocolParseState : std::uint8_t {
-      kParamNum = 1,
-      kParamLen,
-      kParamContent,
+    struct ParseResult {
+        std::error_code ec;
+        bool isWriteCmd;
+        Command data;
+        std::string cmdText;
     };
 
-    enum class CommandParseState : std::uint8_t {
-      kMainCommand = 1,
-      kMainArgv,
-      kCommandOption,
+    namespace detail {
+        struct RESPRequestParseState {
+            virtual void react(RequestParser& fsm) = 0;
+            virtual void exit() {}
+        };
+
+        struct ErrorState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct ParamCountStartState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct ParamCountState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+            void exit() override;
+
+        private:
+            std::string cntStr;
+        };
+
+        struct ParamCountEndState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct ParamLengthStartState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct ParamLengthState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+            void exit() override;
+
+        private:
+            std::string lengthStr;
+        };
+
+        struct ParamLengthEndState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct ParamContentState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+            void exit() override;
+
+        private:
+            std::string content;
+        };
+
+        struct ParamContentEndState : public RESPRequestParseState {
+            void react(RequestParser& fsm) override;
+        };
+
+        struct Result {
+            std::uint16_t paramCnt = 0;
+            std::vector<std::string> paramList;
+
+            explicit operator ParseResult();
+            void BuildCommandText(std::string& cmdText);
+            void BuildCommandData(Command& data);
+        };
+    }// namespace detail
+
+    class RequestParser {
+    private:
+        char input;
+        bool finished;
+        detail::Result result;
+        std::size_t nextParamLength;
+        std::tuple<detail::ParamCountStartState, detail::ParamCountState, detail::ParamCountEndState,
+                   detail::ParamLengthStartState, detail::ParamLengthState, detail::ParamLengthEndState,
+                   detail::ParamContentState, detail::ParamContentEndState, detail::ErrorState>
+                mStates_;
+        detail::RESPRequestParseState* mCurrentState_;
+
+        void RunOnce();
+        void SetCurrentInput(char ch);
+        [[nodiscard]] bool CheckError() const;
+
+    public:
+        RequestParser();
+
+        [[nodiscard]] char GetCurrentInput() const;
+        void SetFinishFlag();
+        void SetParamCnt(std::uint16_t cnt);
+        void SetNextParamLength(std::size_t length);
+        [[nodiscard]] std::size_t GetNextParamLength() const;
+        void AppendParamContent(std::string&& content);
+        [[nodiscard]] const detail::Result& GetResult() const;
+        void Reset();
+
+        template<typename Functor>
+        ParseResult Run(Functor&& getInput) {
+            for (char ch; getInput(ch);) {
+                this->SetCurrentInput(ch);
+                this->RunOnce();
+
+                if (this->CheckError())
+                    return ParseResult{.ec = error::ProtocolErrorCode::kRequestFormat};
+            }
+            return finished ? ParseResult(result) : ParseResult{};
+        }
+
+        template<class S>
+        void Transit() {
+            this->mCurrentState_->exit();
+            this->mCurrentState_ = &std::get<S>(mStates_);
+        }
     };
-
-  private:
-    ProtocolParseState mProtocolState_ : 4;
-    CommandParseState mCommandState_ : 4;
-    std::uint8_t mParamCnt_;
-    std::uint8_t mParamNum_;
-    std::uint16_t mCurParamLen_;
-    ParseResult mResult_;
-    std::error_code mParseError_, mSyntaxError_;
-
-    void ParseCommand(std::string_view param);
-    void ValidateCommand();
-    void HandleParseError(std::error_code err);
-    void HandleSyntaxError(std::error_code err);
-    ParseResult BuildParseResult();
-
-  public:
-    RequestParser();
-    bool IsParseFinished() const;
-    ParseResult ParseLine(std::string_view curLine);                                                                  
-  };
-}
+}// namespace foxbatdb
