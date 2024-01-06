@@ -199,7 +199,17 @@ namespace foxbatdb {
     }
 
     DatabaseManager::DatabaseManager()
-        : mIsNonWrite_{false}, mMaxMemoryStrategy_{new LRUStrategy()} {
+        : mIsNonWrite_{false}, mMaxMemoryStrategy_{nullptr} {
+        switch (Flags::GetInstance().maxMemoryPolicy) {
+            case MaxMemoryPolicyEnum::eLRU:
+                mMaxMemoryStrategy_ = new LRUStrategy();
+                break;
+            case MaxMemoryPolicyEnum::eNoeviction:
+            default:
+                mMaxMemoryStrategy_ = new NoevictionStrategy();
+                break;
+        }
+
         for (std::uint8_t i = 0; i < Flags::GetInstance().dbMaxNum; ++i) {
             Database db{i, mMaxMemoryStrategy_};
             mDBList_.push_back(std::move(db));
@@ -321,10 +331,11 @@ namespace foxbatdb {
             }
         }
     }
+    
     void Database::StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                                         const FileRecord& record) {
-        StorageEngine::PutOption opt{
-                .file = file,
+        StorageEngine::InnerPutOption opt{
+                .logFilePtr = file,
                 .pos = pos,
                 .microSecondTimestamp = record.header.timestamp};
         auto ec = mEngine_.InnerPut(opt, record.data.key, "");
@@ -358,8 +369,7 @@ namespace foxbatdb {
 
     void Database::StrSetForMerge(DataLogFileObjPtr mergeFile,
                                   const std::string& key, const std::string& val) {
-        StorageEngine::PutOption opt{.file = mergeFile};
-        auto ec = mEngine_.InnerPut(opt, key, val);
+        auto ec = mEngine_.InnerPut(StorageEngine::InnerPutOption{.logFilePtr = mergeFile}, key, val);
         if (ec) {
             ServerLog::Error("merge file insert key [] failed: []", key, ec.message());
         }

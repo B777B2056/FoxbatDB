@@ -17,3 +17,7 @@ dbFileMaxSizeMB = 512
 [keyval]
 keyMaxBytes = 1024
 valueMaxBytes = 1024
+
+[memory]
+# maxmemory-policy = "noeviction"
+maxmemory-policy = "allkeys-lru"

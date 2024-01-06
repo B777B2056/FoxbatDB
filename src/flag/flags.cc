@@ -1,5 +1,6 @@
 #include "flags.h"
 #include "toml.hpp"
+#include <unordered_map>
 
 namespace foxbatdb {
     Flags& Flags::GetInstance() {
@@ -30,6 +31,18 @@ namespace foxbatdb {
 
         this->keyMaxBytes = tbl["keyval"]["keyMaxBytes"].value<std::uint32_t>().value();
         this->valMaxBytes = tbl["keyval"]["valueMaxBytes"].value<std::uint32_t>().value();
+
+        {
+            static const std::unordered_map<std::string, MaxMemoryPolicyEnum> maxMemoryPolicyMap{
+                    {"noeviction", MaxMemoryPolicyEnum::eNoeviction},
+                    {"allkeys-lru", MaxMemoryPolicyEnum::eLRU}};
+
+            auto maxMemoryPolicyStr = tbl["memory"]["maxmemory-policy"].value<std::string>().value();
+            if (!maxMemoryPolicyMap.contains(maxMemoryPolicyStr))
+                throw std::runtime_error{"invalid maxmemory-policy config"};
+
+            this->maxMemoryPolicy = maxMemoryPolicyMap.at(maxMemoryPolicyStr);
+        }
     }
 
     void Flags::Preprocess() {
