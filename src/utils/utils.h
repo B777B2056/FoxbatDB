@@ -16,6 +16,9 @@ namespace foxbatdb::utils {
         return m * 1024 * 1024;
     }
 
+    static constexpr std::uint32_t CRC_INIT_VALUE = 0xFFFFFFFF;
+    std::uint32_t CRC(const char* buf, std::size_t size, std::uint32_t lastCRC = CRC_INIT_VALUE);
+
     template<std::integral T>
     std::optional<T> ToInteger(const std::string& data) {
         T ret;

@@ -212,11 +212,11 @@ namespace foxbatdb {
             db->Foreach(
                     [db, currentAvailableNode, savedMergeFileNode](const std::string& key, const RecordObject& valObj) -> void {
                         // 不合并当前正可用的db文件
-                        if (valObj.IsSameLogFile(*currentAvailableNode))
+                        if (valObj.IsInTargetDataLogFile(*currentAvailableNode))
                             return;
-                        // 读取到内存中，将活跃的key和记录写入merge文件内后，更新内存哈希表
-                        if (auto record = valObj.CovertToFileRecord(); record.has_value())
-                            db->StrSetForMerge(*savedMergeFileNode, key, record->data.value);
+                        // 将活跃的key和记录写入merge文件内后，再更新内存索引
+                        if (auto val = valObj.GetValue(); !val.empty())
+                            db->StrSetForMerge(*savedMergeFileNode, key, val);
                     });
         }
 

@@ -23,6 +23,8 @@ namespace foxbatdb {
         void LoadHistoryRecordsFromDisk();
 
     public:
+        DataLogFileManager(const DataLogFileManager&) = delete;
+        DataLogFileManager& operator=(const DataLogFileManager&) = delete;
         ~DataLogFileManager() = default;
         static DataLogFileManager& GetInstance();
         void Init();

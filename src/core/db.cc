@@ -323,7 +323,11 @@ namespace foxbatdb {
     }
     void Database::StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                                         const FileRecord& record) {
-        auto ec = mEngine_.PutForHistoryData(file, pos, record.header.timestamp, record.data.key);
+        StorageEngine::PutOption opt{
+                .file = file,
+                .pos = pos,
+                .microSecondTimestamp = record.header.timestamp};
+        auto ec = mEngine_.InnerPut(opt, record.data.key, "");
         if (ec) {
             ServerLog::Warnning("load history data failed: []", ec.message());
         }
@@ -354,7 +358,8 @@ namespace foxbatdb {
 
     void Database::StrSetForMerge(DataLogFileObjPtr mergeFile,
                                   const std::string& key, const std::string& val) {
-        auto ec = mEngine_.PutForMerge(mergeFile, key, val);
+        StorageEngine::PutOption opt{.file = mergeFile};
+        auto ec = mEngine_.InnerPut(opt, key, val);
         if (ec) {
             ServerLog::Error("merge file insert key [] failed: []", key, ec.message());
         }

@@ -106,7 +106,7 @@ namespace foxbatdb {
 
         mTxUndo_.emplace_back(
                 TxUndoInfo{
-                        .dbFile = valObj->GetLogFileHandler(),
+                        .dbFile = valObj->GetDataLogFileHandler(),
                         .readPos = valObj->GetFileOffset(),
                 });
     }

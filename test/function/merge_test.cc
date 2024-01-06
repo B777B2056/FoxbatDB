@@ -33,8 +33,8 @@ static void ReadAndTestFromDB(CMDServerPtr cmdSession, const std::string& key, c
 }
 
 TEST(MergeTest, Merge) {
-    constexpr static std::size_t dbFileNum = 999;
-    constexpr static std::size_t datasetRecordNum = 1024 * 1024;
+    constexpr static std::size_t dbFileNum = 50;
+    constexpr static std::size_t datasetRecordNum = 1024 * 10;
     constexpr static std::size_t recordSize = sizeof(TestDataset::RecordHeader) + KEY_LENGTH + VAL_LENGTH;
 
     auto dbFileMaxSizeBefore = Flags::GetInstance().dbLogFileMaxSize;

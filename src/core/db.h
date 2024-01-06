@@ -55,6 +55,8 @@ namespace foxbatdb {
         DatabaseManager();
 
     public:
+        DatabaseManager(const DatabaseManager&) = delete;
+        DatabaseManager& operator=(const DatabaseManager&) = delete;
         ~DatabaseManager();
         static DatabaseManager& GetInstance();
         void Init();
