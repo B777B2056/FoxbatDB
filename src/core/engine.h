@@ -26,6 +26,7 @@ namespace foxbatdb {
         static bool LoadFromDisk(FileRecordHeader& header, std::fstream& file, std::streampos pos);
         void SetCRC(const std::string& k, const std::string& v);
         [[nodiscard]] bool CheckCRC(const std::string& k, const std::string& v) const;
+        void TransferEndian();
 
     private:
         [[nodiscard]] std::uint32_t CalculateCRC32Value(const std::string& k, const std::string& v) const;

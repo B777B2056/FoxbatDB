@@ -17,9 +17,9 @@ namespace foxbatdb {
         void BuildDoubleResp(std::string& resp, double val);
 
         /*
-    void BuildBigNumberResp(std::string& resp, bool isNegative,
-                            const std::string& bignum);
-    */
+        void BuildBigNumberResp(std::string& resp, bool isNegative,
+                                const std::string& bignum);
+        */
 
         void BuildNullResp(std::string& resp);
         void BuildArrayResp(std::string& resp,

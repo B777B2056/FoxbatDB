@@ -4,6 +4,7 @@
 #include "log/serverlog.h"
 #include "memory.h"
 #include "utils/utils.h"
+#include <bit>
 
 namespace foxbatdb {
     static bool ValidateFileRecordHeader(const FileRecordHeader& header) {
@@ -65,6 +66,7 @@ namespace foxbatdb {
 
         file.seekg(pos, std::ios_base::beg);
         file.read(reinterpret_cast<char*>(&header), sizeof(header));
+        header.TransferEndian();
 
         if (TxRuntimeState::kData == header.txRuntimeState) {
             if (!ValidateFileRecordHeader(header))
@@ -81,7 +83,17 @@ namespace foxbatdb {
     }
 
     bool FileRecordHeader::CheckCRC(const std::string& k, const std::string& v) const {
-        return crc == CalculateCRC32Value(k, v);
+        return CalculateCRC32Value(k, v) == crc;
+    }
+
+    void FileRecordHeader::TransferEndian() {
+        if constexpr (std::endian::native == std::endian::big)
+            return;
+
+        this->crc = utils::ChangeIntegralEndian(this->crc);
+        this->timestamp = utils::ChangeIntegralEndian(this->timestamp);
+        this->keySize = utils::ChangeIntegralEndian(this->keySize);
+        this->valSize = utils::ChangeIntegralEndian(this->valSize);
     }
 
     void FileRecordData::LoadFromDisk(FileRecordData& data, std::fstream& file,
@@ -115,6 +127,7 @@ namespace foxbatdb {
                 .keySize = k.length(),
                 .valSize = v.length()};
         header.SetCRC(k, v);
+        header.TransferEndian();
 
         file.write(reinterpret_cast<char*>(&header), sizeof(header));
         file.write(k.data(), static_cast<std::streamsize>(k.length()));
@@ -132,6 +145,7 @@ namespace foxbatdb {
                 .keySize = (TxRuntimeState::kBegin == txFlag) ? txCmdNum : 0,
                 .valSize = 0};
         header.SetCRC("", "");
+        header.TransferEndian();
 
         file.write(reinterpret_cast<char*>(&header), sizeof(header));
         file.flush();
