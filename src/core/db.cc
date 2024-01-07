@@ -247,7 +247,7 @@ namespace foxbatdb {
                 db->StrSet(key, val);
             else {
                 if (auto ec = db->Del(key); ec) {
-                    ServerLog::GetInstance().Warnning("load history key [] failed: []", key, ec.message());
+                    ServerLog::GetInstance().Warning("load history key [] failed: []", key, ec.message());
                 }
             }
         }
@@ -340,7 +340,7 @@ namespace foxbatdb {
                 .microSecondTimestamp = record.header.timestamp};
         auto ec = mEngine_.InnerPut(opt, record.data.key, "");
         if (ec) {
-            ServerLog::GetInstance().Warnning("load history data failed: []", ec.message());
+            ServerLog::GetInstance().Warning("load history data failed: []", ec.message());
         }
     }
 

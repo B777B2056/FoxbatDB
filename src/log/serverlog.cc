@@ -25,8 +25,9 @@ namespace foxbatdb {
         return instance;
     }
 
+    void ServerLog::Init() {}
+
     void ServerLog::DumpToDisk() {
-        std::unique_lock lock{mutex_};
         mLogger_->flush();
     }
 }// namespace foxbatdb

@@ -1,6 +1,6 @@
 #include "flags.h"
-#include "log/serverlog.h"
 #include "toml.hpp"
+#include <system_error>
 #include <unordered_map>
 
 namespace foxbatdb {
@@ -40,7 +40,7 @@ namespace foxbatdb {
 
             auto maxMemoryPolicyStr = tbl["memory"]["maxmemory-policy"].value<std::string>().value();
             if (!maxMemoryPolicyMap.contains(maxMemoryPolicyStr))
-                ServerLog::GetInstance().Fatal("invalid maxmemory-policy config");
+                throw std::runtime_error{"invalid maxmemory-policy config"};
 
             this->maxMemoryPolicy = maxMemoryPolicyMap.at(maxMemoryPolicyStr);
         }

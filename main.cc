@@ -4,17 +4,19 @@
 #include "flag/flags.h"
 #include "frontend/server.h"
 #include "log/datalog.h"
+#include "log/oplog.h"
+#include "log/serverlog.h"
 #include <new>
 
-static std::string flagConfPath;
+using namespace foxbatdb;
 
 void OutOfMemoryHandler() {
     // 所有DB进入不允许写入状态，只响应非写入命令
-    foxbatdb::DatabaseManager::GetInstance().SetNonWrite();
+    DatabaseManager::GetInstance().SetNonWrite();
 }
 
 void MemoryAllocRetryFunc() {
-    auto& dbm = foxbatdb::DatabaseManager::GetInstance();
+    auto& dbm = DatabaseManager::GetInstance();
     if (dbm.HaveMemoryAvailable()) {
         dbm.ScanDBForReleaseMemory();
     } else {
@@ -22,27 +24,27 @@ void MemoryAllocRetryFunc() {
     }
 }
 
-
-void ParseArgs(int argc, char** argv) {
+std::string ParseArgs(int argc, char** argv) {
     cmdline::parser parser;
     parser.add<std::string>("flag-conf-path", 'f', "flag conf path", false, "config/flag.toml");
     parser.parse_check(argc, argv);
-    flagConfPath = parser.get<std::string>("flag-conf-path");
+    return parser.get<std::string>("flag-conf-path");
 }
 
-void InitComponents() {
+void InitComponents(const std::string& flagConfPath) {
     std::set_new_handler(MemoryAllocRetryFunc);
-    foxbatdb::Flags::GetInstance().Init(flagConfPath);
-    foxbatdb::DatabaseManager::GetInstance().Init();
-    foxbatdb::DataLogFileManager::GetInstance().Init();
-    foxbatdb::CronJobManager::GetInstance().Init();
+    Flags::GetInstance().Init(flagConfPath);
+    ServerLog::GetInstance().Init();
+    OperationLog::GetInstance().Init();
+    DatabaseManager::GetInstance().Init();
+    DataLogFileManager::GetInstance().Init();
+    CronJobManager::GetInstance().Init();
 }
 
 int main(int argc, char** argv) {
-    ParseArgs(argc, argv);
     // 初始化各组件
-    InitComponents();
+    InitComponents(ParseArgs(argc, argv));
     // kv引擎已准备好，启动服务
-    foxbatdb::DBServer::GetInstance().Run();
+    DBServer::GetInstance().Run();
     return 0;
 }

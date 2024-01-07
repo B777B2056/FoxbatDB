@@ -62,7 +62,6 @@ namespace foxbatdb {
         mOperationLogDumpTimer_.SetTimeoutHandler(
                 []() -> void {
                     OperationLog::GetInstance().DumpToDisk();
-                    ServerLog::GetInstance().Info("flush operation log to disk ok");
                 });
     }
 

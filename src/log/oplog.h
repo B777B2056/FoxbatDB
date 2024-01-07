@@ -76,8 +76,11 @@ namespace foxbatdb {
         void WriteAllCommand();// 从缓冲队列里取出所有写命令，刷入os内核文件写缓冲区
 
     public:
+        OperationLog(const OperationLog&) = delete;
+        OperationLog& operator=(const OperationLog&) = delete;
         ~OperationLog();
         static OperationLog& GetInstance();
+        void Init();
         void Stop();
         void AppendCommand(const std::string& cmd);
         void DumpToDisk();

@@ -6,6 +6,8 @@
 #include "frontend/cmdmap.h"
 #include "frontend/parser.h"
 #include "log/datalog.h"
+#include "log/oplog.h"
+#include "log/serverlog.h"
 #include <filesystem>
 #include <random>
 #include <sstream>
@@ -28,6 +30,8 @@ void MemoryAllocRetryFunc() {
 void InitComponents(const std::string& flagConfPath) {
     std::set_new_handler(MemoryAllocRetryFunc);
     foxbatdb::Flags::GetInstance().Init(flagConfPath);
+    foxbatdb::ServerLog::GetInstance().Init();
+    foxbatdb::OperationLog::GetInstance().Init();
     foxbatdb::DatabaseManager::GetInstance().Init();
     foxbatdb::DataLogFileManager::GetInstance().Init();
     foxbatdb::CronJobManager::GetInstance().Init();

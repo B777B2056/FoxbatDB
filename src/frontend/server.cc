@@ -58,7 +58,7 @@ namespace foxbatdb {
                     if (!ec) {
                         ProcessMsg();
                     } else {
-                        ServerLog::GetInstance().Warnning("read request from client failed: {}", ec.message());
+                        ServerLog::GetInstance().Warning("read request from client failed: {}", ec.message());
                     }
                 });
     }
@@ -70,7 +70,7 @@ namespace foxbatdb {
                               if (!ec) {
                                   DoRead();
                               } else {
-                                  ServerLog::GetInstance().Warnning("write response to client failed: {}", ec.message());
+                                  ServerLog::GetInstance().Warning("write response to client failed: {}", ec.message());
                               }
                           });
     }
@@ -123,7 +123,7 @@ namespace foxbatdb {
                     if (!ec) {
                         std::make_shared<CMDSession>(std::move(socket))->Start();
                     } else {
-                        ServerLog::GetInstance().Warnning("accept connection failed: {}", ec.message());
+                        ServerLog::GetInstance().Warning("accept connection failed: {}", ec.message());
                     }
                     this->DoAccept();
                 });

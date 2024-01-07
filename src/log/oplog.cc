@@ -61,4 +61,6 @@ namespace foxbatdb {
         std::unique_lock lock{mFileMutex_};
         mFile_.flush();
     }
+
+    void OperationLog::Init() {}
 }// namespace foxbatdb
