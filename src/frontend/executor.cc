@@ -127,6 +127,7 @@ namespace foxbatdb {
 
     std::tuple<bool, std::string> CMDExecutor::ExecWithErrorFlag(
             std::weak_ptr<CMDSession> weak, const Command& cmd) {
+        if (!cmd.call) return {true, ""};
         // 根据命令和对应参数，执行命令
         ProcResult result = (*(cmd.call))(weak, cmd);
         // 根据执行结果构造响应对象
