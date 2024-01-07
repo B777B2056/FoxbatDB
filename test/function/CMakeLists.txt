@@ -12,10 +12,15 @@ enable_testing()
 
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TEST_ROOT_DIR)
 file(GLOB_RECURSE TOOLS_TEST_SRC "${TEST_ROOT_DIR}/tools/*.cc")
-file(GLOB_RECURSE FUNCTION_TEST_SRC "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-add_executable(foxbatdb_test "main.cc" ${SRC} ${TOOLS_TEST_SRC} ${FUNCTION_TEST_SRC})
-target_link_libraries(foxbatdb_test PRIVATE Threads::Threads GTest::gtest_main spdlog::spdlog)
+add_executable(foxbatdb_setget_test "setget_test.cc" ${SRC} ${TOOLS_TEST_SRC})
+target_link_libraries(foxbatdb_setget_test PRIVATE Threads::Threads GTest::gtest_main spdlog::spdlog)
+
+add_executable(foxbatdb_merge_test "merge_test.cc" ${SRC} ${TOOLS_TEST_SRC})
+target_link_libraries(foxbatdb_merge_test PRIVATE Threads::Threads GTest::gtest_main spdlog::spdlog)
+
+add_executable(foxbatdb_tx_test "tx_test.cc" ${SRC} ${TOOLS_TEST_SRC})
+target_link_libraries(foxbatdb_tx_test PRIVATE Threads::Threads GTest::gtest_main spdlog::spdlog)
 
 #include(GoogleTest)
 #gtest_discover_tests(foxbatdb_test DISCOVERY_TIMEOUT 600)

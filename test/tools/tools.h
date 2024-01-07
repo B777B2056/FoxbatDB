@@ -18,6 +18,9 @@ foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std
 foxbatdb::ParseResult BuildCMD(const std::string& cmdName, const std::vector<std::string>& argv,
                                const std::vector<foxbatdb::CommandOption>& options);
 
+std::string GenerateUUID();
+void RemoveRelatedFiles();
+
 class TestDataset {
 public:
 #pragma pack(push, 1)

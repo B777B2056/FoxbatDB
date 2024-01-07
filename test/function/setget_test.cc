@@ -1,11 +1,8 @@
 #include "errors/runtime.h"
 #include "tools/tools.h"
 #include "utils/resp.h"
-#include "utils/utils.h"
-#include <algorithm>
 #include <chrono>
 #include <gtest/gtest.h>
-#include <random>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -14,8 +11,9 @@ using namespace foxbatdb;
 using namespace std::chrono_literals;
 using CMDServerPtr = std::shared_ptr<foxbatdb::CMDSession>;
 
-static std::string TimestampKeyGenerator() {
-    return std::to_string(utils::GetMicrosecondTimestamp());
+static std::string UniqueKeyGenerator() {
+    static std::uint64_t i = 0;
+    return GenerateUUID() + "_" + std::to_string(i++);
 }
 
 static void InsertIntoDBWithNoOption(CMDServerPtr cmdSession, const std::string& key, const std::string& val) {
@@ -48,7 +46,7 @@ static void ReadAndTestNotExistFromDB(CMDServerPtr cmdSession, const std::string
 }
 
 TEST(SetGetTest, WithNoOption) {
-    TestDataset dataset{1024, 64, TimestampKeyGenerator};
+    TestDataset dataset{1024, 64, UniqueKeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     // 注入kv存储引擎
     dataset.Foreach(
@@ -63,7 +61,7 @@ TEST(SetGetTest, WithNoOption) {
 }
 
 TEST(SetGetTest, WithExOptionNotTimeout) {
-    TestDataset dataset{1024, 64, TimestampKeyGenerator};
+    TestDataset dataset{1024, 64, UniqueKeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     auto exTime = 1000min;// 超时时间为1000分钟
     // 注入kv存储引擎
@@ -84,7 +82,7 @@ TEST(SetGetTest, WithExOptionNotTimeout) {
 }
 
 TEST(SetGetTest, WithExOptionTimeout) {
-    TestDataset dataset{1024, 64, TimestampKeyGenerator};
+    TestDataset dataset{1024, 64, UniqueKeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     auto exTime = 1min;// 超时时间为1分钟
     // 注入kv存储引擎
@@ -121,7 +119,7 @@ TEST(SetGetTest, RandomDeleteKey) {
     static int count = 0;
     std::unordered_set<std::string> deletedKeySet;
 
-    TestDataset dataset{1024, 64, TimestampKeyGenerator};
+    TestDataset dataset{1024, 64, UniqueKeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     // 注入kv存储引擎
     dataset.Foreach(
@@ -141,4 +139,14 @@ TEST(SetGetTest, RandomDeleteKey) {
                 else
                     ReadAndTestNotExistFromDB(cmdSession, key);
             });
+}
+
+static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
+
+int main(int argc, char** argv) {
+    InitComponents(flagConfPath);
+    testing::InitGoogleTest(&argc, argv);
+    int ret = RUN_ALL_TESTS();
+    RemoveRelatedFiles();
+    return ret;
 }

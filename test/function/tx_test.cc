@@ -7,7 +7,7 @@
 using namespace foxbatdb;
 using CMDServerPtr = std::shared_ptr<foxbatdb::CMDSession>;
 
-static std::string TimestampKeyGenerator() {
+static std::string KeyGenerator() {
     static int i = 1;
     return std::to_string(i++) + GenRandomString(32);
 }
@@ -52,7 +52,7 @@ static void ReadAndTestFromDB(CMDServerPtr cmdSession, const std::string& key, c
 }
 
 TEST(TxTest, WithDiscard) {
-    TestDataset dataset{64, 64, TimestampKeyGenerator};
+    TestDataset dataset{64, 64, KeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     // ×¢Èëkv´æ´¢ÒýÇæ
     dataset.Foreach(
@@ -79,7 +79,7 @@ TEST(TxTest, WithWatch) {
     std::string watchedVal = GenRandomString(64);
     std::string watchedValModify = GenRandomString(64);
 
-    TestDataset dataset{64, 64, TimestampKeyGenerator};
+    TestDataset dataset{64, 64, KeyGenerator};
     auto cmdSessionTx2 = ::GetMockCMDSession();
     // ×¢Èëkv´æ´¢ÒýÇæ
     dataset.Foreach(
@@ -134,7 +134,7 @@ TEST(TxTest, WithWatch) {
 }
 
 TEST(TxTest, WithNoRollback) {
-    TestDataset dataset{64, 64, TimestampKeyGenerator};
+    TestDataset dataset{64, 64, KeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     EnableTx(cmdSession);
     // ×¢Èëkv´æ´¢ÒýÇæ
@@ -151,7 +151,7 @@ TEST(TxTest, WithNoRollback) {
 }
 
 TEST(TxTest, WithRollback) {
-    TestDataset dataset{64, 64, TimestampKeyGenerator};
+    TestDataset dataset{64, 64, KeyGenerator};
     auto cmdSession = ::GetMockCMDSession();
     // ×¢Èëkv´æ´¢ÒýÇæ
     dataset.Foreach(
@@ -176,4 +176,14 @@ TEST(TxTest, WithRollback) {
             [cmdSession](const std::string& key, const std::string& val) -> void {
                 ReadAndTestFromDB(cmdSession, key, val);
             });
+}
+
+static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
+
+int main(int argc, char** argv) {
+    InitComponents(flagConfPath);
+    testing::InitGoogleTest(&argc, argv);
+    int ret = RUN_ALL_TESTS();
+    RemoveRelatedFiles();
+    return ret;
 }

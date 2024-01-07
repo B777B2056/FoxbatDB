@@ -57,3 +57,13 @@ TEST(MergeTest, Merge) {
     // ª÷∏¥dbFileSize…Ë÷√
     Flags::GetInstance().dbLogFileMaxSize = dbFileMaxSizeBefore;
 }
+
+static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
+
+int main(int argc, char** argv) {
+    InitComponents(flagConfPath);
+    testing::InitGoogleTest(&argc, argv);
+    int ret = RUN_ALL_TESTS();
+    RemoveRelatedFiles();
+    return ret;
+}
