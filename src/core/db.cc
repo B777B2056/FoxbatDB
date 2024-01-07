@@ -231,7 +231,7 @@ namespace foxbatdb {
         }
         std::fstream file{path, std::ios_base::in | std::ios::binary};
         if (!file.is_open()) {
-            ServerLog::Error("data log file open failed: {}", ::strerror(errno));
+            ServerLog::GetInstance().Error("data log file open failed: {}", ::strerror(errno));
             return false;
         }
 
@@ -247,7 +247,7 @@ namespace foxbatdb {
                 db->StrSet(key, val);
             else {
                 if (auto ec = db->Del(key); ec) {
-                    ServerLog::Warnning("load history key [] failed: []", key, ec.message());
+                    ServerLog::GetInstance().Warnning("load history key [] failed: []", key, ec.message());
                 }
             }
         }
@@ -331,7 +331,7 @@ namespace foxbatdb {
             }
         }
     }
-    
+
     void Database::StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
                                         const FileRecord& record) {
         StorageEngine::InnerPutOption opt{
@@ -340,7 +340,7 @@ namespace foxbatdb {
                 .microSecondTimestamp = record.header.timestamp};
         auto ec = mEngine_.InnerPut(opt, record.data.key, "");
         if (ec) {
-            ServerLog::Warnning("load history data failed: []", ec.message());
+            ServerLog::GetInstance().Warnning("load history data failed: []", ec.message());
         }
     }
 
@@ -371,7 +371,7 @@ namespace foxbatdb {
                                   const std::string& key, const std::string& val) {
         auto ec = mEngine_.InnerPut(StorageEngine::InnerPutOption{.logFilePtr = mergeFile}, key, val);
         if (ec) {
-            ServerLog::Error("merge file insert key [] failed: []", key, ec.message());
+            ServerLog::GetInstance().Error("merge file insert key [] failed: []", key, ec.message());
         }
     }
 

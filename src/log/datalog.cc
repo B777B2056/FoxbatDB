@@ -8,7 +8,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 namespace foxbatdb {
@@ -37,7 +36,7 @@ namespace foxbatdb {
         if (!std::filesystem::exists(Flags::GetInstance().dbLogFileDir) ||
             !std::filesystem::is_directory(Flags::GetInstance().dbLogFileDir)) {
             if (!std::filesystem::create_directory(Flags::GetInstance().dbLogFileDir)) {
-                throw std::runtime_error{"log file directory create failed"};
+                ServerLog::GetInstance().Fatal("log file directory create failed");
             }
         }
 
@@ -47,7 +46,7 @@ namespace foxbatdb {
             std::fstream file{fileName, std::ios::in | std::ios::out |
                                                 std::ios::binary | std::ios::app};
             if (!file.is_open()) {
-                throw std::runtime_error{std::string{"log file create failed: "} + ::strerror(errno)};
+                ServerLog::GetInstance().Fatal("log file create failed: {}", ::strerror(errno));
             }
             mLogFilePool_.emplace_back(
                     std::make_shared<DataLogFileWrapper>(fileName, std::move(file)));
@@ -77,7 +76,7 @@ namespace foxbatdb {
             std::fstream file{fileName, std::ios::in | std::ios::out |
                                                 std::ios::binary | std::ios::app};
             if (!file.is_open()) {
-                ServerLog::Error("data log file pool expand failed: {}", ::strerror(errno));
+                ServerLog::GetInstance().Error("data log file pool expand failed: {}", ::strerror(errno));
                 continue;
             }
 
@@ -150,7 +149,7 @@ namespace foxbatdb {
             std::fstream file{fileName, std::ios::in | std::ios::out |
                                                 std::ios::binary | std::ios::app};
             if (!file.is_open()) {
-                ServerLog::Error("history data log file open failed: {}", ::strerror(errno));
+                ServerLog::GetInstance().Error("history data log file open failed: {}", ::strerror(errno));
                 continue;
             }
             mLogFilePool_.emplace_back(
@@ -193,7 +192,7 @@ namespace foxbatdb {
         std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
                                                       std::ios::binary | std::ios::app};
         if (!mergeFile.is_open()) {
-            ServerLog::Error("merge data log file open failed: {}", ::strerror(errno));
+            ServerLog::GetInstance().Error("merge data log file open failed: {}", ::strerror(errno));
             return;
         }
 

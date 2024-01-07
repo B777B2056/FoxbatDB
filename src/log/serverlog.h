@@ -1,46 +1,52 @@
 #pragma once
 #include "spdlog/spdlog.h"
+#include <mutex>
 
 namespace foxbatdb {
     class ServerLog {
     private:
+        mutable std::mutex mutex_;
         std::shared_ptr<spdlog::logger> mLogger_;
         ServerLog();
 
-        static ServerLog& GetInstance();
-
     public:
+        static ServerLog& GetInstance();
         ServerLog(const ServerLog&) = delete;
         ServerLog& operator=(const ServerLog&) = delete;
         ServerLog(ServerLog&&) = default;
         ServerLog& operator=(ServerLog&&) = default;
         ~ServerLog();
 
-        static void DumpToDisk();
+        void DumpToDisk();
 
         template<typename... Args>
-        static void Debug(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-            ServerLog::GetInstance().mLogger_->debug(fmt, std::forward<Args>(args)...);
+        void Debug(spdlog::format_string_t<Args...> fmt, Args&&... args) {
+            std::unique_lock lock{mutex_};
+            mLogger_->debug(fmt, std::forward<Args>(args)...);
         }
 
         template<typename... Args>
-        static void Info(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-            ServerLog::GetInstance().mLogger_->info(fmt, std::forward<Args>(args)...);
+        void Info(spdlog::format_string_t<Args...> fmt, Args&&... args) {
+            std::unique_lock lock{mutex_};
+            mLogger_->info(fmt, std::forward<Args>(args)...);
         }
 
         template<typename... Args>
-        static void Warnning(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-            ServerLog::GetInstance().mLogger_->warn(fmt, std::forward<Args>(args)...);
+        void Warnning(spdlog::format_string_t<Args...> fmt, Args&&... args) {
+            std::unique_lock lock{mutex_};
+            mLogger_->warn(fmt, std::forward<Args>(args)...);
         }
 
         template<typename... Args>
-        static void Error(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-            ServerLog::GetInstance().mLogger_->error(fmt, std::forward<Args>(args)...);
+        void Error(spdlog::format_string_t<Args...> fmt, Args&&... args) {
+            std::unique_lock lock{mutex_};
+            mLogger_->error(fmt, std::forward<Args>(args)...);
         }
 
         template<typename... Args>
-        static void Fatal(spdlog::format_string_t<Args...> fmt, Args&&... args) {
-            ServerLog::GetInstance().mLogger_->critical(fmt, std::forward<Args>(args)...);
+        void Fatal(spdlog::format_string_t<Args...> fmt, Args&&... args) {
+            std::unique_lock lock{mutex_};
+            mLogger_->critical(fmt, std::forward<Args>(args)...);
         }
     };
 }// namespace foxbatdb

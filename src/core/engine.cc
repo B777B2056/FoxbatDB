@@ -174,7 +174,6 @@ namespace foxbatdb {
         auto logFile = logFilePtr.lock();
         // 当前record文件读指针位置为写入数据之前的写指针位置
         logFile->file.sync();
-        logFile->file.clear();
         this->pos = logFile->file.tellp();
         // 刷入日志文件（磁盘）
         FileRecord::DumpRecordToDisk(logFile->file, this->dbIdx, k, v);
@@ -269,7 +268,7 @@ namespace foxbatdb {
         RecordMetaObject opt{.dbIdx = mDBIdx_};
         auto valObj = RecordObject::New(opt, key, val);
         if (!valObj) {
-            ServerLog::Error("memory allocate failed");
+            ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
             return {};
         }
@@ -288,7 +287,7 @@ namespace foxbatdb {
 
         auto valObj = RecordObject::New(meta, key, val);
         if (!valObj) {
-            ServerLog::Error("memory allocate failed");
+            ServerLog::GetInstance().Error("memory allocate failed");
             return error::RuntimeErrorCode::kMemoryOut;
         }
 
@@ -307,13 +306,8 @@ namespace foxbatdb {
             return {};
         }
 
-        if (auto val = valObj.lock()->GetValue(); !val.empty()) {
-            ec = error::RuntimeErrorCode::kSuccess;
-            return val;
-        } else {
-            ec = error::RuntimeErrorCode::kIntervalError;
-            return {};
-        }
+        ec = error::RuntimeErrorCode::kSuccess;
+        return valObj.lock()->GetValue();
     }
 
     std::weak_ptr<RecordObject> StorageEngine::Get(const std::string& key) {

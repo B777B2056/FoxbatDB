@@ -57,12 +57,12 @@ namespace foxbatdb {
     void CronJobManager::AddJobs() {
         mServerLogDumpTimer_.SetTimeoutHandler(
                 []() -> void {
-                    ServerLog::DumpToDisk();
+                    ServerLog::GetInstance().DumpToDisk();
                 });
         mOperationLogDumpTimer_.SetTimeoutHandler(
                 []() -> void {
                     OperationLog::GetInstance().DumpToDisk();
-                    ServerLog::Info("flush operation log to disk ok");
+                    ServerLog::GetInstance().Info("flush operation log to disk ok");
                 });
     }
 
