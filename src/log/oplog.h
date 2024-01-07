@@ -16,7 +16,6 @@ namespace foxbatdb {
         private:
             std::unique_ptr<T[]> data;
             std::atomic<std::size_t> head, tail;
-
             constexpr static std::size_t size = 1024;
 
         public:
@@ -31,15 +30,6 @@ namespace foxbatdb {
             [[nodiscard]] bool IsEmpty() const {
                 return head.load(std::memory_order_relaxed) ==
                        tail.load(std::memory_order_acquire);
-            }
-
-            bool Enqueue(const T& item) {
-                std::size_t pos = tail.load(std::memory_order_relaxed);
-                if ((pos + 1) % size == head.load(std::memory_order_acquire))
-                    return false;
-                data[pos] = item;
-                tail.store((pos + 1) % size, std::memory_order_release);
-                return true;
             }
 
             bool Enqueue(T&& item) {
@@ -64,16 +54,11 @@ namespace foxbatdb {
 
     class OperationLog {
     private:
-        std::jthread mThread_;
         std::ofstream mFile_;
-        std::mutex mFileMutex_;
-        std::atomic_flag mNeedWriteAll_;
-        std::promise<void> mWriteAllBarrier_;
         detail::RingBuffer<std::string> mCmdBuffer_;
 
         OperationLog();
-        void WriteOneCommand();// 从缓冲队列里取出一条写命令，刷入os内核文件写缓冲区
-        void WriteAllCommand();// 从缓冲队列里取出所有写命令，刷入os内核文件写缓冲区
+        void WriteAllCommands();// 从缓冲队列里取出所有写命令，刷入os内核文件写缓冲区
 
     public:
         OperationLog(const OperationLog&) = delete;
@@ -81,8 +66,7 @@ namespace foxbatdb {
         ~OperationLog();
         static OperationLog& GetInstance();
         void Init();
-        void Stop();
-        void AppendCommand(const std::string& cmd);
+        void AppendCommand(std::string&& cmd);
         void DumpToDisk();
     };
 }// namespace foxbatdb

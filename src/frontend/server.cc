@@ -2,6 +2,7 @@
 #include "core/db.h"
 #include "errors/runtime.h"
 #include "flag/flags.h"
+#include "log/oplog.h"
 #include "log/serverlog.h"
 #include "utils/resp.h"
 #include <memory>
@@ -98,8 +99,12 @@ namespace foxbatdb {
 
             if (result.ec)
                 DoWrite(utils::BuildErrorResponse(result.ec));
-            else
+            else {
                 DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
+                if (result.isWriteCmd) {
+                    OperationLog::GetInstance().AppendCommand(std::move(result.cmdText));
+                }
+            }
         }
     }
 

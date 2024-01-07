@@ -3,7 +3,6 @@
 #include "core/db.h"
 #include "errors/runtime.h"
 #include "frontend/server.h"
-#include "log/oplog.h"
 #include "parser.h"
 #include "utils/resp.h"
 #include <algorithm>
@@ -191,9 +190,6 @@ namespace foxbatdb {
                 break;
             default:
                 break;
-        }
-        if (result.isWriteCmd) {
-            OperationLog::GetInstance().AppendCommand(result.cmdText);
         }
         return resp;
     }
