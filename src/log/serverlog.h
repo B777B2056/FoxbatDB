@@ -16,7 +16,6 @@ namespace foxbatdb {
         ~ServerLog();
 
         void Init();
-        void DumpToDisk();
 
         template<typename... Args>
         void Info(spdlog::format_string_t<Args...> fmt, Args&&... args) {

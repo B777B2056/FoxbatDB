@@ -14,6 +14,9 @@ namespace foxbatdb {
                                               flag.serverLogPath,
                                               flag.serverLogMaxFileSize,
                                               flag.serverLogMaxFileNumber);
+        mLogger_->set_level(spdlog::level::info);
+        mLogger_->flush_on(spdlog::level::warn);
+        spdlog::flush_every(std::chrono::seconds{Flags::GetInstance().serverLogFlushPeriodSec});
     }
 
     ServerLog::~ServerLog() {
@@ -26,8 +29,4 @@ namespace foxbatdb {
     }
 
     void ServerLog::Init() {}
-
-    void ServerLog::DumpToDisk() {
-        mLogger_->flush();
-    }
 }// namespace foxbatdb
