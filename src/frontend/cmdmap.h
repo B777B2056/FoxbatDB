@@ -35,6 +35,8 @@ namespace foxbatdb {
     };
 
     namespace detail {
+        constexpr static std::uint8_t MAX_COMMAND_NAME_LENGTH = 10;
+
         struct MainCommandWrapper {
             CmdProcFunc call;
             bool isWriteCmd;

@@ -39,7 +39,7 @@ namespace foxbatdb {
 
         void DoRead();
         void DoWrite(const std::string& data);
-        void ProcessMsg();
+        void ProcessMsg(std::size_t bytesTransferred);
     };
 
     class DBServer {

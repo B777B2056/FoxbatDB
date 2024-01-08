@@ -2,7 +2,9 @@
 #include "flag/flags.h"
 #include "tools/tools.h"
 #include <benchmark/benchmark.h>
+#include <cassert>
 #include <sstream>
+#include <string_view>
 
 static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
 
@@ -14,6 +16,7 @@ static auto value = ::GenRandomString(512);
 
 class MockClient {
 private:
+    char buf[1024];
     asio::io_context ioCtx;
     asio::ip::tcp::socket socket;
     asio::ip::tcp::endpoint end_point;
@@ -51,12 +54,20 @@ public:
     void SendCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
         asio::write(socket, asio::buffer(MockClient::BuildCMD(cmdName, argv)));
     }
+
+    void TestResponse(const std::string& expectResp) {
+        std::size_t bytes = asio::read(socket,
+                                       asio::buffer(buf),
+                                       asio::transfer_at_least(3));
+        assert(std::string_view(buf, buf + bytes) == utils::BuildResponse(expectResp));
+    }
 };
 
 static void Set(benchmark::State& state) {
     for (auto _: state) {
         // 注入一条数据到kv存储引擎
         MockClient::GetInstance().SendCMD("set", {key, value});
+        MockClient::GetInstance().TestResponse("OK");
     }
 }
 
@@ -64,6 +75,7 @@ static void Get(benchmark::State& state) {
     for (auto _: state) {
         // 从kv存储引擎读取一条数据
         MockClient::GetInstance().SendCMD("get", {key});
+        MockClient::GetInstance().TestResponse(value);
     }
 }
 

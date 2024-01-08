@@ -6,6 +6,9 @@ namespace foxbatdb::error {
             case ProtocolErrorCode::kSuccess:
                 return "Success";
 
+            case ProtocolErrorCode::kContinue:
+                return "Continue";
+
             case ProtocolErrorCode::kArgNumbers:
                 return "Argument number error";
 

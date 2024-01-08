@@ -38,9 +38,9 @@ namespace foxbatdb {
         auto self(shared_from_this());
         asio::async_read(
                 mSocket_, mReadBuffer_, asio::transfer_at_least(1),
-                [this, self](std::error_code ec, std::size_t) {
+                [this, self](std::error_code ec, std::size_t bytesTransferred) {
                     if (!ec) {
-                        ProcessMsg();
+                        ProcessMsg(bytesTransferred);
                     } else {
                         ServerLog::GetInstance().Warning("read request from client failed: {}", ec.message());
                     }
@@ -59,34 +59,20 @@ namespace foxbatdb {
                           });
     }
 
-    void CMDSession::ProcessMsg() {
-        bool needReadMoreBytes = false;
-        auto result = mParser_.Run([this, &needReadMoreBytes](char& ch) -> bool {
-            std::istream is(&mReadBuffer_);
-            is.get(ch);
-
-            if (is.fail() || is.bad()) {
-                return false;
-            }
-            if (is.eof() || (1 != is.gcount())) {
-                needReadMoreBytes = true;
-                return false;
-            }
-            return true;
-        });
-
-        if (needReadMoreBytes)
+    void CMDSession::ProcessMsg(std::size_t bytesTransferred) {
+        std::istream is(&mReadBuffer_);
+        auto result = mParser_.Run(is, bytesTransferred);
+        if (error::ProtocolErrorCode::kContinue == result.ec) {
             DoRead();
-        else {
-            mParser_.Reset();
+            return;
+        }
 
-            if (result.ec)
-                DoWrite(utils::BuildErrorResponse(result.ec));
-            else {
-                DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
-                if (result.isWriteCmd) {
-                    OperationLog::GetInstance().AppendCommand(std::move(result.cmdText));
-                }
+        if (result.ec)
+            DoWrite(utils::BuildErrorResponse(result.ec));
+        else {
+            DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
+            if (result.isWriteCmd) {
+                OperationLog::GetInstance().AppendCommand(std::move(result.cmdText));
             }
         }
     }

@@ -74,6 +74,9 @@ namespace foxbatdb {
             std::uint16_t paramCnt = 0;
             std::vector<std::string> paramList;
 
+            static bool TestMainCommandAndTolower(std::string& str);
+            static bool TestMainCommandOptionAndTolower(std::string& str);
+
             void ConvertToParseResult(ParseResult& ret);
             void BuildCommandText(std::string& cmdText);
             void BuildCommandData(Command& data);
@@ -108,21 +111,7 @@ namespace foxbatdb {
         [[nodiscard]] const detail::Result& GetResult() const;
         void Reset();
 
-        template<typename Functor>
-        ParseResult Run(Functor&& getInput) {
-            ParseResult ret{.ec = error::ProtocolErrorCode::kRequestFormat};
-            for (char ch; getInput(ch);) {
-                this->SetCurrentInput(ch);
-                this->RunOnce();
-
-                if (this->CheckError())
-                    return ret;
-            }
-
-            if (finished)
-                result.ConvertToParseResult(ret);
-            return ret;
-        }
+        ParseResult Run(std::istream& is, std::size_t bytesTransferred);
 
         template<class S>
         void Transit() {

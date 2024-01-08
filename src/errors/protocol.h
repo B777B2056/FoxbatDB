@@ -4,6 +4,7 @@
 namespace foxbatdb::error {
     enum class ProtocolErrorCode {
         kSuccess = 0,
+        kContinue,
         kArgNumbers,
         kCommandNotFound,
         kSyntax,

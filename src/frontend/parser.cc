@@ -109,6 +109,37 @@ namespace foxbatdb {
             }
         }
 
+        static void Tolower(std::string& str) {
+            for (char& ch: str) {
+                ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+        }
+
+        bool Result::TestMainCommandAndTolower(std::string& str) {
+            if (str.size() > MAX_COMMAND_NAME_LENGTH)
+                return false;
+
+            auto tmp = str;
+            detail::Tolower(str);
+            if (MainCommandMap.contains(tmp)) {
+                str = std::move(tmp);
+                return true;
+            }
+            return false;
+        }
+
+        bool Result::TestMainCommandOptionAndTolower(std::string& str) {
+            if (str.size() > MAX_COMMAND_NAME_LENGTH)
+                return false;
+
+            auto tmp = str;
+            detail::Tolower(str);
+            if (CommandOptionMap.contains(tmp)) {
+                str = std::move(tmp);
+                return true;
+            }
+            return false;
+        }
 
         void Result::ConvertToParseResult(ParseResult& ret) {
             if (paramList.empty()) {
@@ -116,12 +147,12 @@ namespace foxbatdb {
                 return;
             }
 
-            const auto& mainCMDName = paramList.front();
-            if (!MainCommandMap.contains(mainCMDName)) {
+            if (!Result::TestMainCommandAndTolower(paramList.front())) {
                 ret.ec = error::ProtocolErrorCode::kCommandNotFound;
                 return;
             }
 
+            const auto& mainCMDName = paramList.front();
             const auto& mainCMDInfo = MainCommandMap.at(mainCMDName);
 
             ret.isWriteCmd = mainCMDInfo.isWriteCmd;
@@ -145,20 +176,17 @@ namespace foxbatdb {
         void Result::BuildCommandData(Command& data) {
             std::size_t i;
             for (i = 1; i < paramList.size(); ++i) {
-                auto&& param = paramList.at(i);
-                if (CommandOptionMap.contains(param)) {
+                if (TestMainCommandOptionAndTolower(paramList.at(i)))
                     break;
-                }
-                data.argv.emplace_back(std::move(param));
+                data.argv.emplace_back(std::move(paramList.at(i)));
             }
 
             for (; i < paramList.size(); ++i) {
-                auto&& param = paramList.at(i);
-                if (CommandOptionMap.contains(param)) {
-                    const auto& cmdOptInfo = CommandOptionMap.at(param);
-                    data.options.emplace_back(std::move(param), cmdOptInfo.type);
+                if (TestMainCommandOptionAndTolower(paramList.at(i))) {
+                    const auto& cmdOptInfo = CommandOptionMap.at(paramList.at(i));
+                    data.options.emplace_back(std::move(paramList.at(i)), cmdOptInfo.type);
                 } else {
-                    data.options.back().argv.emplace_back(std::move(param));
+                    data.options.back().argv.emplace_back(std::move(paramList.at(i)));
                 }
             }
         }
@@ -169,7 +197,7 @@ namespace foxbatdb {
     }
 
     void RequestParser::SetCurrentInput(char ch) {
-        this->input = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+        this->input = ch;
     }
 
     void RequestParser::SetParamCnt(std::uint16_t cnt) {
@@ -213,5 +241,27 @@ namespace foxbatdb {
 
     std::size_t RequestParser::GetNextParamLength() const {
         return this->nextParamLength;
+    }
+
+    ParseResult RequestParser::Run(std::istream& is, std::size_t bytesTransferred) {
+        char ch;
+        for (std::size_t i = 0; i < bytesTransferred; ++i) {
+            if (!is)
+                break;
+
+            is.get(ch);
+            this->SetCurrentInput(ch);
+            this->RunOnce();
+
+            if (this->CheckError())
+                return {.ec = error::ProtocolErrorCode::kRequestFormat};
+        }
+
+        ParseResult ret{.ec = error::ProtocolErrorCode::kContinue};
+        if (finished) {
+            result.ConvertToParseResult(ret);
+            this->Reset();
+        }
+        return ret;
     }
 }// namespace foxbatdb
