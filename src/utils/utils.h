@@ -10,7 +10,7 @@
 
 namespace foxbatdb::utils {
     std::uint64_t GetMicrosecondTimestamp();
-    std::chrono::steady_clock::time_point MicrosecondTimestampCovertToTimePoint(std::uint64_t timestamp);
+    std::chrono::steady_clock::time_point MicrosecondTimestampConvertToTimePoint(std::uint64_t timestamp);
     bool IsValidTimestamp(std::uint64_t timestamp);
 
     constexpr unsigned long long operator"" _MB(unsigned long long m);

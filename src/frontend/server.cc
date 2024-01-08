@@ -13,29 +13,12 @@ namespace foxbatdb {
         mReadBuffer_.prepare(1024);
     }
 
-    void CMDSession::Start() {
-        DoRead();
-    }
-
-    Database* CMDSession::CurrentDB() {
-        return mExecutor_.CurrentDB();
-    }
-
-    void CMDSession::SwitchToTargetDB(std::uint8_t dbIdx) {
-        mExecutor_.SwitchToTargetDB(dbIdx);
-    }
-
-    void CMDSession::AddWatchKey(const std::string& key) {
-        mExecutor_.AddWatchKey(key);
-    }
-
-    void CMDSession::DelWatchKey(const std::string& key) {
-        mExecutor_.DelWatchKey(key);
-    }
-
-    void CMDSession::SetCurrentTxToFail() {
-        mExecutor_.SetCurrentTxToFail();
-    }
+    void CMDSession::Start() { DoRead(); }
+    Database* CMDSession::CurrentDB() { return mExecutor_.CurrentDB(); }
+    void CMDSession::SwitchToTargetDB(std::uint8_t dbIdx) { mExecutor_.SwitchToTargetDB(dbIdx); }
+    void CMDSession::AddWatchKey(const std::string& key) { mExecutor_.AddWatchKey(key); }
+    void CMDSession::DelWatchKey(const std::string& key) { mExecutor_.DelWatchKey(key); }
+    void CMDSession::SetCurrentTxToFail() { mExecutor_.SetCurrentTxToFail(); }
 
     void CMDSession::WritePublishMsg(const std::string& channel,
                                      const std::string& msg) {

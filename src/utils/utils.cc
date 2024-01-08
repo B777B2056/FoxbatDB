@@ -8,7 +8,7 @@ namespace foxbatdb::utils {
                 .count();
     }
 
-    std::chrono::steady_clock::time_point MicrosecondTimestampCovertToTimePoint(
+    std::chrono::steady_clock::time_point MicrosecondTimestampConvertToTimePoint(
             std::uint64_t timestamp) {
         return std::chrono::steady_clock::time_point{
                 std::chrono::microseconds{timestamp}};

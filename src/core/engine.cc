@@ -163,7 +163,7 @@ namespace foxbatdb {
     }
 
     std::string RecordObject::GetValue() const {
-        if (FileRecord record; CovertToFileRecord(record)) {
+        if (FileRecord record; ConvertToFileRecord(record)) {
             return record.data.value;
         } else {
             return {};
@@ -187,7 +187,7 @@ namespace foxbatdb {
         return this->logFilePtr;
     }
 
-    bool RecordObject::CovertToFileRecord(FileRecord& record) const {
+    bool RecordObject::ConvertToFileRecord(FileRecord& record) const {
         return FileRecord::LoadFromDisk(record, logFilePtr.lock()->file, pos);
     }
 
@@ -283,7 +283,7 @@ namespace foxbatdb {
         RecordMetaObject meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
         if (opt.pos != -1) meta.pos = opt.pos;
         if (opt.microSecondTimestamp != 0)
-            meta.createdTime = utils::MicrosecondTimestampCovertToTimePoint(opt.microSecondTimestamp);
+            meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
 
         auto valObj = RecordObject::New(meta, key, val);
         if (!valObj) {

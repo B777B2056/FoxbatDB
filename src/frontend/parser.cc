@@ -109,29 +109,29 @@ namespace foxbatdb {
             }
         }
 
-        Result::operator ParseResult() {
+
+        void Result::ConvertToParseResult(ParseResult& ret) {
             if (paramList.empty()) {
-                return {.ec = error::ProtocolErrorCode::kRequestFormat};
+                ret.ec = error::ProtocolErrorCode::kRequestFormat;
+                return;
             }
 
             const auto& mainCMDName = paramList.front();
             if (!MainCommandMap.contains(mainCMDName)) {
-                return {.ec = error::ProtocolErrorCode::kCommandNotFound};
+                ret.ec = error::ProtocolErrorCode::kCommandNotFound;
+                return;
             }
 
             const auto& mainCMDInfo = MainCommandMap.at(mainCMDName);
 
-            ParseResult ret{
-                    .isWriteCmd = mainCMDInfo.isWriteCmd,
-                    .data = Command{
-                            .name = mainCMDName,
-                            .call = mainCMDInfo.call,
-                    }};
+            ret.isWriteCmd = mainCMDInfo.isWriteCmd;
+            ret.data.name = mainCMDName;
+            ret.data.call = mainCMDInfo.call;
 
-            BuildCommandText(ret.cmdText);
+            if (ret.isWriteCmd)
+                BuildCommandText(ret.cmdText);
             BuildCommandData(ret.data);
             ret.ec = ret.data.Validate();
-            return ret;
         }
 
         void Result::BuildCommandText(std::string& cmdText) {

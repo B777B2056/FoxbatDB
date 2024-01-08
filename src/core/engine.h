@@ -67,7 +67,7 @@ namespace foxbatdb {
     private:
         explicit RecordObject(const RecordMetaObject& opt);
         void UpdateValue(const std::string& k, const std::string& v);
-        bool CovertToFileRecord(FileRecord& record) const;
+        bool ConvertToFileRecord(FileRecord& record) const;
 
     public:
         ~RecordObject() = default;
