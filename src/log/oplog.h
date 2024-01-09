@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace foxbatdb {
     namespace detail {
@@ -52,10 +53,12 @@ namespace foxbatdb {
         };
     }// namespace detail
 
+    struct Command;
+
     class OperationLog {
     private:
         std::ofstream mFile_;
-        detail::RingBuffer<std::string> mCmdBuffer_;
+        detail::RingBuffer<std::vector<std::string>> mCmdBuffer_;
 
         OperationLog();
         void WriteAllCommands();// 从缓冲队列里取出所有写命令，刷入os内核文件写缓冲区
@@ -66,7 +69,7 @@ namespace foxbatdb {
         ~OperationLog();
         static OperationLog& GetInstance();
         void Init();
-        void AppendCommand(std::string&& cmd);
+        void AppendCommand(Command&& data);
         void DumpToDisk();
     };
 }// namespace foxbatdb

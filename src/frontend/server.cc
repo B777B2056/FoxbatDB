@@ -72,7 +72,7 @@ namespace foxbatdb {
         else {
             DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
             if (result.isWriteCmd) {
-                OperationLog::GetInstance().AppendCommand(std::move(result.cmdText));
+                OperationLog::GetInstance().AppendCommand(std::move(result.data));
             }
         }
     }

@@ -159,18 +159,8 @@ namespace foxbatdb {
             ret.data.name = mainCMDName;
             ret.data.call = mainCMDInfo.call;
 
-            if (ret.isWriteCmd)
-                BuildCommandText(ret.cmdText);
             BuildCommandData(ret.data);
             ret.ec = ret.data.Validate();
-        }
-
-        void Result::BuildCommandText(std::string& cmdText) {
-            std::vector<std::string> filledParamList{paramList.size(), "$"};
-            for (std::size_t i = 0; i < paramList.size(); ++i) {
-                filledParamList[i] += (std::to_string(paramList[i].size()) + "\r\n" + paramList[i] + "\r\n");
-            }
-            cmdText = utils::BuildArrayResponseWithFilledItems(filledParamList);
         }
 
         void Result::BuildCommandData(Command& data) {

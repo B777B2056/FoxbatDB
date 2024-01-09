@@ -13,7 +13,6 @@ namespace foxbatdb {
         std::error_code ec;
         bool isWriteCmd;
         Command data;
-        std::string cmdText;
     };
 
     namespace detail {
@@ -78,7 +77,6 @@ namespace foxbatdb {
             static bool TestMainCommandOptionAndTolower(std::string& str);
 
             void ConvertToParseResult(ParseResult& ret);
-            void BuildCommandText(std::string& cmdText);
             void BuildCommandData(Command& data);
         };
     }// namespace detail
