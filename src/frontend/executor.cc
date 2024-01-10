@@ -69,7 +69,7 @@ namespace foxbatdb {
     std::string CMDExecutor::ExecTx(std::weak_ptr<CMDSession> weak) {
         if (mCmdQueue_.empty()) {
             CancelTxMode();
-            return utils::BuildResponse("OK");
+            return utils::OK_RESPONSE;
         }
 
         std::vector<std::string> resps;
@@ -163,7 +163,7 @@ namespace foxbatdb {
                 break;
             case TxState::kBegin:
                 EnableTxMode();
-                resp = utils::BuildResponse("OK");
+                resp = utils::OK_RESPONSE;
                 break;
             case TxState::kAppend:
                 if (!mCmdQueue_.empty() && !mCmdQueue_.back().isValidCmd) {
@@ -179,7 +179,7 @@ namespace foxbatdb {
                     if (result.isWriteCmd) {
                         AppendUndoLog(result.data);
                     }
-                    resp = utils::BuildResponse("QUEUED");
+                    resp = utils::QUEUED_RESPONSE;
                 }
                 break;
             case TxState::kExec:
@@ -187,7 +187,7 @@ namespace foxbatdb {
                 break;
             case TxState::kDiscard:
                 RollbackTx();
-                resp = utils::BuildResponse("OK");
+                resp = utils::OK_RESPONSE;
                 break;
             default:
                 break;

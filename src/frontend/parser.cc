@@ -1,6 +1,7 @@
 ﻿#include "parser.h"
 #include "utils/resp.h"
 #include <cctype>
+#include <istream>
 #include <unordered_map>
 
 namespace foxbatdb {

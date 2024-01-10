@@ -96,5 +96,8 @@ namespace foxbatdb {
             detail::BuildPushesResp(resp, list);
             return resp;
         }
+        
+        const static std::string OK_RESPONSE = BuildResponse("OK");
+        const static std::string QUEUED_RESPONSE = BuildResponse("QUEUED");
     }// namespace utils
 }// namespace foxbatdb

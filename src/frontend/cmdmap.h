@@ -1,5 +1,5 @@
 #pragma once
-#include "core/db.h"
+#include "core/handler.h"
 #include <climits>
 #include <unordered_map>
 #include <unordered_set>
@@ -165,6 +165,14 @@ namespace foxbatdb {
                              .isWriteCmd = false,
                              .minArgc = 0,
                              .maxArgc = 0,
+                     }},
+
+                    {"prefix",
+                     detail::MainCommandWrapper{
+                             .call = &Prefix,
+                             .isWriteCmd = false,
+                             .minArgc = 1,
+                             .maxArgc = 1,
                      }},
 
                     {"command",
