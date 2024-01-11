@@ -7,42 +7,42 @@
 #include <bit>
 
 namespace foxbatdb {
-    static bool ValidateFileRecordHeader(const FileRecordHeader& header) {
-        if (!utils::IsValidTimestamp(header.timestamp))
+    bool FileRecordHeader::ValidateFileRecordHeader() const {
+        if (!utils::IsValidTimestamp(this->timestamp))
             return false;
 
-        if (TxRuntimeState::kData != header.txRuntimeState)
+        if (TxRuntimeState::kData != this->txRuntimeState)
             return false;
 
-        if (header.dbIdx > Flags::GetInstance().dbMaxNum)
+        if (this->dbIdx > Flags::GetInstance().dbMaxNum)
             return false;
 
-        if (header.keySize > Flags::GetInstance().keyMaxBytes)
+        if (this->keySize > Flags::GetInstance().keyMaxBytes)
             return false;
 
-        if (header.valSize > Flags::GetInstance().valMaxBytes)
+        if (this->valSize > Flags::GetInstance().valMaxBytes)
             return false;
 
         return true;
     }
 
-    static bool ValidateTxFlagRecord(const FileRecordHeader& header) {
-        if (!utils::IsValidTimestamp(header.timestamp))
+    bool FileRecordHeader::ValidateTxFlagRecord() const {
+        if (!utils::IsValidTimestamp(this->timestamp))
             return false;
 
-        if (TxRuntimeState::kData == header.txRuntimeState)
+        if (TxRuntimeState::kData == this->txRuntimeState)
             return false;
 
-        if (header.dbIdx > Flags::GetInstance().dbMaxNum)
+        if (this->dbIdx > Flags::GetInstance().dbMaxNum)
             return false;
 
-        if ((TxRuntimeState::kBegin != header.txRuntimeState) && (0 != header.keySize))
+        if ((TxRuntimeState::kBegin != this->txRuntimeState) && (0 != this->keySize))
             return false;
 
-        if ((TxRuntimeState::kBegin == header.txRuntimeState) && (0 == header.keySize))
+        if ((TxRuntimeState::kBegin == this->txRuntimeState) && (0 == this->keySize))
             return false;
 
-        if (header.valSize != 0)
+        if (this->valSize != 0)
             return false;
 
         return true;
@@ -60,22 +60,37 @@ namespace foxbatdb {
         return crcVal ^ utils::CRC_INIT_VALUE;
     }
 
-    bool FileRecordHeader::LoadFromDisk(FileRecordHeader& header, std::fstream& file, std::streampos pos) {
+    bool FileRecordHeader::LoadFromDisk(std::fstream& file, std::streampos pos) {
         if (pos < 0)
             return false;
 
         file.seekg(pos, std::ios_base::beg);
-        file.read(reinterpret_cast<char*>(&header), sizeof(header));
-        header.TransferEndian();
+        file.read(reinterpret_cast<char*>(&this->crc), sizeof(this->crc));
+        file.read(reinterpret_cast<char*>(&this->timestamp), sizeof(this->timestamp));
+        file.read(reinterpret_cast<char*>(&this->txRuntimeState), sizeof(this->txRuntimeState));
+        file.read(reinterpret_cast<char*>(&this->dbIdx), sizeof(this->dbIdx));
+        file.read(reinterpret_cast<char*>(&this->keySize), sizeof(this->keySize));
+        file.read(reinterpret_cast<char*>(&this->valSize), sizeof(this->valSize));
+        this->TransferEndian();
 
-        if (TxRuntimeState::kData == header.txRuntimeState) {
-            if (!ValidateFileRecordHeader(header))
+        if (TxRuntimeState::kData == txRuntimeState) {
+            if (!this->ValidateFileRecordHeader())
                 return false;
         } else {
-            if (!ValidateTxFlagRecord(header))
+            if (!this->ValidateTxFlagRecord())
                 return false;
         }
         return true;
+    }
+
+    void FileRecordHeader::DumpToDisk(std::fstream& file) {
+        this->TransferEndian();
+        file.write(reinterpret_cast<const char*>(&this->crc), sizeof(this->crc));
+        file.write(reinterpret_cast<const char*>(&this->timestamp), sizeof(this->timestamp));
+        file.write(reinterpret_cast<const char*>(&this->txRuntimeState), sizeof(this->txRuntimeState));
+        file.write(reinterpret_cast<const char*>(&this->dbIdx), sizeof(this->dbIdx));
+        file.write(reinterpret_cast<const char*>(&this->keySize), sizeof(this->keySize));
+        file.write(reinterpret_cast<const char*>(&this->valSize), sizeof(this->valSize));
     }
 
     void FileRecordHeader::SetCRC(const std::string& k, const std::string& v) {
@@ -108,7 +123,7 @@ namespace foxbatdb {
     }
 
     bool FileRecord::LoadFromDisk(FileRecord& record, std::fstream& file, std::streampos pos) {
-        if (!FileRecordHeader::LoadFromDisk(record.header, file, pos))
+        if (!record.header.LoadFromDisk(file, pos))
             return false;
 
         if (TxRuntimeState::kData == record.header.txRuntimeState)
@@ -127,9 +142,8 @@ namespace foxbatdb {
                 .keySize = k.length(),
                 .valSize = v.length()};
         header.SetCRC(k, v);
-        header.TransferEndian();
+        header.DumpToDisk(file);
 
-        file.write(reinterpret_cast<char*>(&header), sizeof(header));
         file.write(k.data(), static_cast<std::streamsize>(k.length()));
         file.write(v.data(), static_cast<std::streamsize>(v.length()));
         file.flush();
@@ -145,9 +159,7 @@ namespace foxbatdb {
                 .keySize = (TxRuntimeState::kBegin == txFlag) ? txCmdNum : 0,
                 .valSize = 0};
         header.SetCRC("", "");
-        header.TransferEndian();
-
-        file.write(reinterpret_cast<char*>(&header), sizeof(header));
+        header.DumpToDisk(file);
         file.flush();
     }
 

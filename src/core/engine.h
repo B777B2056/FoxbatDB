@@ -3,6 +3,7 @@
 #include "tsl/htrie_map.h"
 #include <chrono>
 #include <cstdint>
+#include <new>
 #include <optional>
 #include <vector>
 
@@ -13,9 +14,18 @@ namespace foxbatdb {
         kBegin,
         kFinish
     };
+    
+#if defined(__cpp_lib_hardware_interference_size)
+#define L1_CACHE_LINE_ALIGNAS alignas(std::hardware_destructive_interference_size)
+#elif defined(__x86_64__)
+#define L1_CACHE_LINE_ALIGNAS alignas(64)
+#elif defined(__aarch64__)
+#define L1_CACHE_LINE_ALIGNAS alignas(128)
+#else
+#define L1_CACHE_LINE_ALIGNAS
+#endif
 
-#pragma pack(push, 1)
-    struct FileRecordHeader {
+    struct L1_CACHE_LINE_ALIGNAS FileRecordHeader {
         std::uint32_t crc = 0;
         std::uint64_t timestamp = 0;
         TxRuntimeState txRuntimeState = TxRuntimeState::kData;
@@ -23,15 +33,19 @@ namespace foxbatdb {
         std::uint64_t keySize = 0;
         std::uint64_t valSize = 0;
 
-        static bool LoadFromDisk(FileRecordHeader& header, std::fstream& file, std::streampos pos);
+        bool LoadFromDisk(std::fstream& file, std::streampos pos);
+        void DumpToDisk(std::fstream& file);
         void SetCRC(const std::string& k, const std::string& v);
         [[nodiscard]] bool CheckCRC(const std::string& k, const std::string& v) const;
         void TransferEndian();
 
     private:
         [[nodiscard]] std::uint32_t CalculateCRC32Value(const std::string& k, const std::string& v) const;
+        [[nodiscard]] bool ValidateFileRecordHeader() const;
+        [[nodiscard]] bool ValidateTxFlagRecord() const;
     };
-#pragma pack(pop)
+
+#undef LI_CACHE_LINE_ALIGNAS
 
     struct FileRecordData {
         std::string key;
