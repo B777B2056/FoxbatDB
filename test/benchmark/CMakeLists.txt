@@ -18,5 +18,5 @@ file(GLOB_RECURSE TOOLS_TEST_SRC "${TEST_ROOT_DIR}/tools/*.cc")
 add_executable(foxbatdb_benchmark_embedded "benchmark_embedded.cc" ${SRC} ${TOOLS_TEST_SRC})
 target_link_libraries(foxbatdb_benchmark_embedded PRIVATE Threads::Threads benchmark::benchmark spdlog::spdlog)
 
-add_executable(foxbatdb_benchmark_external "benchmark_external.cc" ${SRC} ${TOOLS_TEST_SRC})
-target_link_libraries(foxbatdb_benchmark_external PRIVATE Threads::Threads benchmark::benchmark spdlog::spdlog)
+add_executable(foxbatdb_benchmark_external "benchmark_external.cc")
+target_link_libraries(foxbatdb_benchmark_external PRIVATE Threads::Threads benchmark::benchmark)

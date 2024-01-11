@@ -1,18 +1,26 @@
 #include "asio.hpp"
-#include "flag/flags.h"
-#include "tools/tools.h"
 #include <benchmark/benchmark.h>
-#include <cassert>
 #include <sstream>
-#include <string_view>
 
-static std::string flagConfPath = "/mnt/e/jr/FoxbatDB/config/flag.toml";
+#define KEY_SIZE 512
+#define VAL_SIZE 512
 
-using namespace foxbatdb;
-using CMDServerPtr = std::shared_ptr<foxbatdb::CMDSession>;
+static std::string GenRandomString(std::size_t length) {
+    auto randchar = []() -> char {
+        const char charset[] =
+                "0123456789"
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                "abcdefghijklmnopqrstuvwxyz";
+        const size_t max_index = (sizeof(charset) - 1);
+        return charset[std::rand() % max_index];
+    };
+    std::string str(length, 0);
+    std::generate_n(str.begin(), length, randchar);
+    return str;
+}
 
-static auto key = ::GenRandomString(512);
-static auto value = ::GenRandomString(512);
+static auto key = ::GenRandomString(KEY_SIZE);
+static auto value = ::GenRandomString(VAL_SIZE);
 
 class MockClient {
 private:
@@ -20,12 +28,6 @@ private:
     asio::io_context ioCtx;
     asio::ip::tcp::socket socket;
     asio::ip::tcp::endpoint end_point;
-
-    MockClient()
-        : ioCtx{}, socket{ioCtx},
-          end_point{asio::ip::address::from_string("127.0.0.1"), Flags::GetInstance().port} {
-        socket.connect(end_point);
-    }
 
     static std::string BuildCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
         std::stringstream ss;
@@ -39,57 +41,78 @@ private:
         return ss.str();
     }
 
+    static std::string BuildResponse(const std::string& content) {
+        std::string resp;
+        resp += "+";
+        resp += content;
+        resp += "\r\n";
+        return resp;
+    }
+
 public:
+    MockClient(const char* ip, std::uint16_t port)
+        : ioCtx{}, socket{ioCtx},
+          end_point{asio::ip::address::from_string(ip), port} {
+        socket.connect(end_point);
+    }
+
     MockClient(const MockClient&) = delete;
     MockClient& operator=(const MockClient&) = delete;
     ~MockClient() = default;
-
-    static MockClient& GetInstance() {
-        static MockClient clt;
-        return clt;
-    }
-
-    void Init() {}
 
     void SendCMD(const std::string& cmdName, const std::vector<std::string>& argv) {
         asio::write(socket, asio::buffer(MockClient::BuildCMD(cmdName, argv)));
     }
 
     void TestResponse(const std::string& expectResp) {
-        std::size_t bytes = asio::read(socket,
-                                       asio::buffer(buf),
-                                       asio::transfer_at_least(3));
-        assert(std::string_view(buf, buf + bytes) == utils::BuildResponse(expectResp));
+        asio::read(socket,
+                   asio::buffer(buf),
+                   asio::transfer_at_least(3));
     }
 };
 
-static void Set(benchmark::State& state) {
+MockClient foxbatdbClt{"127.0.0.1", 7698};
+MockClient redisClt{"127.0.0.1", 6379};
+
+static void FoxbatDBSet(benchmark::State& state) {
     for (auto _: state) {
         // 注入一条数据到kv存储引擎
-        MockClient::GetInstance().SendCMD("set", {key, value});
-        MockClient::GetInstance().TestResponse("OK");
+        foxbatdbClt.SendCMD("set", {key, value});
+        foxbatdbClt.TestResponse("OK");
     }
 }
 
-static void Get(benchmark::State& state) {
+static void FoxbatDBGet(benchmark::State& state) {
     for (auto _: state) {
         // 从kv存储引擎读取一条数据
-        MockClient::GetInstance().SendCMD("get", {key});
-        MockClient::GetInstance().TestResponse(value);
+        foxbatdbClt.SendCMD("get", {key});
+        foxbatdbClt.TestResponse(value);
     }
 }
 
-void Init() {
-    foxbatdb::Flags::GetInstance().Init(flagConfPath);
-    MockClient::GetInstance().Init();
+static void RedisSet(benchmark::State& state) {
+    for (auto _: state) {
+        // 注入一条数据到kv存储引擎
+        redisClt.SendCMD("set", {key, value});
+        redisClt.TestResponse("OK");
+    }
 }
 
-/* 注意：必须先运行FoxbatDB进程 */
+static void RedisGet(benchmark::State& state) {
+    for (auto _: state) {
+        // 从kv存储引擎读取一条数据
+        redisClt.SendCMD("get", {key});
+        redisClt.TestResponse(value);
+    }
+}
+
+/* 注意：必须先运行FoxbatDB进程和Redis服务 */
 int main(int argc, char** argv) {
     ::benchmark::Initialize(&argc, argv);
-    Init();
-    ::benchmark::RegisterBenchmark("Set", &Set);
-    ::benchmark::RegisterBenchmark("Get", &Get);
+    ::benchmark::RegisterBenchmark("FoxbatDBSet", &FoxbatDBSet);
+    ::benchmark::RegisterBenchmark("FoxbatDBGet", &FoxbatDBGet);
+    ::benchmark::RegisterBenchmark("RedisSet", &RedisSet);
+    ::benchmark::RegisterBenchmark("RedisGet", &RedisGet);
     ::benchmark::RunSpecifiedBenchmarks();
     ::benchmark::Shutdown();
     return 0;

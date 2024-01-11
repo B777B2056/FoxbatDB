@@ -1,17 +1,17 @@
 [startup]
 listenPort = 7698
 databaseNumber = 16
-serverLogPath = "log/foxbatdb.log"
+serverLogPath = "/mnt/e/jr/FoxbatDB/out/log/foxbatdb.log"
 serverLogMaxFileSizeMB = 512
 serverLogMaxFileNumber = 10
 serverLogFlushPeriodSec = 5
 
 [aof]
 aofCronJobPeriodMs = 3000
-aofLogFilePath = "foxbatdb.oplog"
+aofLogFilePath = "/mnt/e/jr/FoxbatDB/out/log/foxbatdb.oplog"
 
 [dbfile]
-dbFileDirectory = "db"
+dbFileDirectory = "/mnt/e/jr/FoxbatDB/out/log/db"
 dbFileMaxSizeMB = 512
 
 [keyval]
