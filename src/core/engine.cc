@@ -275,7 +275,7 @@ namespace foxbatdb {
                                                    const std::string& key, const std::string& val) {
         ec = error::RuntimeErrorCode::kSuccess;
         RecordObjectMeta meta{.dbIdx = mDBIdx_};
-        auto valObj = RecordObjectPool::GetInstance().Allocate(std::move(meta)).lock();
+        auto valObj = RecordObjectPool::GetInstance().Acquire(std::move(meta)).lock();
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
@@ -295,7 +295,7 @@ namespace foxbatdb {
         if (opt.microSecondTimestamp != 0)
             meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
 
-        auto valObj = RecordObjectPool::GetInstance().Allocate(std::move(meta)).lock();
+        auto valObj = RecordObjectPool::GetInstance().Acquire(std::move(meta)).lock();
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             return error::RuntimeErrorCode::kMemoryOut;

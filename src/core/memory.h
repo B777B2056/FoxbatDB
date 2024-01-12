@@ -64,7 +64,7 @@ namespace foxbatdb {
         void Init();
         static RecordObjectPool& GetInstance();
 
-        std::weak_ptr<RecordObject> Allocate(RecordObjectMeta&& meta);
+        std::weak_ptr<RecordObject> Acquire(RecordObjectMeta&& meta);
         void Release(std::weak_ptr<RecordObject> ptr);
 
         [[maybe_unused]] [[nodiscard]] std::size_t GetPoolSize() const;

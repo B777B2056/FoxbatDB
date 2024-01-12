@@ -64,15 +64,14 @@ namespace foxbatdb {
                                      TxRuntimeState txFlag, std::size_t txCmdNum = 0);
     };
 
+    constexpr static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
+
     struct L1_CACHE_LINE_ALIGNAS RecordObjectMeta {
         std::uint8_t dbIdx = 0;
         DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
         std::streampos pos = -1;
         std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
         std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
-
-    private:
-        constexpr const static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
     };
 
     class L1_CACHE_LINE_ALIGNAS RecordObject {

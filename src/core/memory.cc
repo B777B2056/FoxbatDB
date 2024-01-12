@@ -57,7 +57,7 @@ namespace foxbatdb {
         return instance;
     }
 
-    std::weak_ptr<RecordObject> RecordObjectPool::Allocate(RecordObjectMeta&& meta) {
+    std::weak_ptr<RecordObject> RecordObjectPool::Acquire(RecordObjectMeta&& meta) {
         if (mFreeObjects_.empty()) {
             this->ExpandPoolSize();
         }
@@ -86,11 +86,11 @@ namespace foxbatdb {
         }
     }
 
-    std::size_t RecordObjectPool::GetPoolSize() const {
+    [[maybe_unused]] std::size_t RecordObjectPool::GetPoolSize() const {
         return mAllocatedObjects_.size();
     }
 
-    std::size_t RecordObjectPool::GetFreeObjectCount() const {
+    [[maybe_unused]] std::size_t RecordObjectPool::GetFreeObjectCount() const {
         return mFreeObjects_.size();
     }
 }// namespace foxbatdb
