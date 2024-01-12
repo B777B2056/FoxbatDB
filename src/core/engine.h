@@ -14,7 +14,7 @@ namespace foxbatdb {
         kBegin,
         kFinish
     };
-    
+
 #if defined(__cpp_lib_hardware_interference_size)
 #define L1_CACHE_LINE_ALIGNAS alignas(std::hardware_destructive_interference_size)
 #elif defined(__x86_64__)
@@ -45,8 +45,6 @@ namespace foxbatdb {
         [[nodiscard]] bool ValidateTxFlagRecord() const;
     };
 
-#undef LI_CACHE_LINE_ALIGNAS
-
     struct FileRecordData {
         std::string key;
         std::string value;
@@ -66,26 +64,28 @@ namespace foxbatdb {
                                      TxRuntimeState txFlag, std::size_t txCmdNum = 0);
     };
 
-    struct RecordMetaObject {
-        std::uint8_t dbIdx = 0;
-        DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
-        std::streampos pos = -1;
-        std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
-        std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
+    class L1_CACHE_LINE_ALIGNAS RecordObject {
+    public:
+        struct L1_CACHE_LINE_ALIGNAS Meta {
+            std::uint8_t dbIdx = 0;
+            DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
+            std::streampos pos = -1;
+            std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
+            std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
 
+        private:
+            constexpr const static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
+        };
+        
     private:
-        constexpr const static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
-    };
-
-    class RecordObject : private RecordMetaObject {
-    private:
-        explicit RecordObject(const RecordMetaObject& opt);
+        Meta meta;
+        explicit RecordObject(Meta&& opt);
         void UpdateValue(const std::string& k, const std::string& v);
         bool ConvertToFileRecord(FileRecord& record) const;
 
     public:
         ~RecordObject() = default;
-        static std::shared_ptr<RecordObject> New(const RecordMetaObject& opt,
+        static std::shared_ptr<RecordObject> New(Meta&& opt,
                                                  const std::string& k, const std::string& v);
 
         [[nodiscard]] std::string GetValue() const;
@@ -100,6 +100,8 @@ namespace foxbatdb {
         [[nodiscard]] std::chrono::milliseconds GetExpiration() const;
         [[nodiscard]] bool IsExpired() const;
     };
+
+#undef LI_CACHE_LINE_ALIGNAS
 
     class MaxMemoryStrategy;
 

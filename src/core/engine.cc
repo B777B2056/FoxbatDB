@@ -163,12 +163,11 @@ namespace foxbatdb {
         file.flush();
     }
 
-    RecordObject::RecordObject(const RecordMetaObject& opt)
-        : RecordMetaObject(opt) {}
+    RecordObject::RecordObject(Meta&& opt) : meta{std::move(opt)} {}
 
-    std::shared_ptr<RecordObject> RecordObject::New(const RecordMetaObject& opt,
+    std::shared_ptr<RecordObject> RecordObject::New(Meta&& opt,
                                                     const std::string& k, const std::string& v) {
-        std::shared_ptr<RecordObject> obj{new RecordObject(opt)};
+        std::shared_ptr<RecordObject> obj{new RecordObject(std::move(opt))};
         if (!k.empty() && !v.empty())
             obj->UpdateValue(k, v);
         return obj;
@@ -183,12 +182,12 @@ namespace foxbatdb {
     }
 
     void RecordObject::UpdateValue(const std::string& k, const std::string& v) {
-        auto logFile = logFilePtr.lock();
+        auto logFile = meta.logFilePtr.lock();
         // 当前record文件读指针位置为写入数据之前的写指针位置
         logFile->file.sync();
-        this->pos = logFile->file.tellp();
+        meta.pos = logFile->file.tellp();
         // 刷入日志文件（磁盘）
-        FileRecord::DumpRecordToDisk(logFile->file, this->dbIdx, k, v);
+        FileRecord::DumpRecordToDisk(logFile->file, meta.dbIdx, k, v);
     }
 
     void RecordObject::MarkAsDeleted(const std::string& k) {
@@ -196,16 +195,16 @@ namespace foxbatdb {
     }
 
     DataLogFileObjPtr RecordObject::GetDataLogFileHandler() const {
-        return this->logFilePtr;
+        return meta.logFilePtr;
     }
 
     bool RecordObject::ConvertToFileRecord(FileRecord& record) const {
-        return FileRecord::LoadFromDisk(record, logFilePtr.lock()->file, pos);
+        return FileRecord::LoadFromDisk(record, meta.logFilePtr.lock()->file, meta.pos);
     }
 
     bool RecordObject::IsInTargetDataLogFile(DataLogFileObjPtr targetFilePtr) const {
         auto targetFile = targetFilePtr.lock();
-        auto logFile = logFilePtr.lock();
+        auto logFile = meta.logFilePtr.lock();
         if (!targetFile || !logFile) {
             return false;
         }
@@ -213,7 +212,7 @@ namespace foxbatdb {
     }
 
     std::fstream::pos_type RecordObject::GetFileOffset() const {
-        return pos;
+        return meta.pos;
     }
 
     void RecordObject::SetExpiration(std::chrono::seconds sec) {
@@ -221,18 +220,18 @@ namespace foxbatdb {
     }
 
     void RecordObject::SetExpiration(std::chrono::milliseconds ms) {
-        expirationTimeMs = ms;
+        meta.expirationTimeMs = ms;
     }
 
     std::chrono::milliseconds RecordObject::GetExpiration() const {
-        return expirationTimeMs;
+        return meta.expirationTimeMs;
     }
 
     bool RecordObject::IsExpired() const {
-        if (expirationTimeMs == std::chrono::milliseconds{ULLONG_MAX}) {
+        if (meta.expirationTimeMs == std::chrono::milliseconds{ULLONG_MAX}) {
             return false;
         }
-        auto exTime = createdTime + expirationTimeMs;
+        auto exTime = meta.createdTime + meta.expirationTimeMs;
         return std::chrono::steady_clock::now() >= exTime;
     }
 
@@ -277,8 +276,8 @@ namespace foxbatdb {
     std::weak_ptr<RecordObject> StorageEngine::Put(std::error_code& ec,
                                                    const std::string& key, const std::string& val) {
         ec = error::RuntimeErrorCode::kSuccess;
-        RecordMetaObject opt{.dbIdx = mDBIdx_};
-        auto valObj = RecordObject::New(opt, key, val);
+        RecordObject::Meta opt{.dbIdx = mDBIdx_};
+        auto valObj = RecordObject::New(std::move(opt), key, val);
         if (!valObj) {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
@@ -292,12 +291,12 @@ namespace foxbatdb {
 
     std::error_code StorageEngine::InnerPut(const StorageEngine::InnerPutOption& opt,
                                             const std::string& key, const std::string& val) {
-        RecordMetaObject meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
+        RecordObject::Meta meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
         if (opt.pos != -1) meta.pos = opt.pos;
         if (opt.microSecondTimestamp != 0)
             meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
 
-        auto valObj = RecordObject::New(meta, key, val);
+        auto valObj = RecordObject::New(std::move(meta), key, val);
         if (!valObj) {
             ServerLog::GetInstance().Error("memory allocate failed");
             return error::RuntimeErrorCode::kMemoryOut;
