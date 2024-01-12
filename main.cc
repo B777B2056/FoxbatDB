@@ -1,5 +1,6 @@
 ﻿#include "cmdline.h"
 #include "core/db.h"
+#include "core/memory.h"
 #include "cron/cron.h"
 #include "flag/flags.h"
 #include "frontend/server.h"
@@ -38,6 +39,7 @@ void InitComponents(const std::string& flagConfPath) {
     OperationLog::GetInstance().Init();
     DatabaseManager::GetInstance().Init();
     DataLogFileManager::GetInstance().Init();
+    RecordObjectPool::GetInstance().Init();
     CronJobManager::GetInstance().Init();
 }
 

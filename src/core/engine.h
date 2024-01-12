@@ -64,29 +64,27 @@ namespace foxbatdb {
                                      TxRuntimeState txFlag, std::size_t txCmdNum = 0);
     };
 
-    class L1_CACHE_LINE_ALIGNAS RecordObject {
-    public:
-        struct L1_CACHE_LINE_ALIGNAS Meta {
-            std::uint8_t dbIdx = 0;
-            DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
-            std::streampos pos = -1;
-            std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
-            std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
+    struct L1_CACHE_LINE_ALIGNAS RecordObjectMeta {
+        std::uint8_t dbIdx = 0;
+        DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
+        std::streampos pos = -1;
+        std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
+        std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
 
-        private:
-            constexpr const static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
-        };
-        
     private:
-        Meta meta;
-        explicit RecordObject(Meta&& opt);
-        void UpdateValue(const std::string& k, const std::string& v);
+        constexpr const static std::chrono::milliseconds INVALID_EXPIRE_TIME{ULLONG_MAX};
+    };
+
+    class L1_CACHE_LINE_ALIGNAS RecordObject {
+    private:
+        RecordObjectMeta meta;
         bool ConvertToFileRecord(FileRecord& record) const;
 
     public:
-        ~RecordObject() = default;
-        static std::shared_ptr<RecordObject> New(Meta&& opt,
-                                                 const std::string& k, const std::string& v);
+        RecordObject();
+
+        void SetMeta(RecordObjectMeta&& m);
+        void UpdateValue(const std::string& k, const std::string& v);
 
         [[nodiscard]] std::string GetValue() const;
         void MarkAsDeleted(const std::string& k);

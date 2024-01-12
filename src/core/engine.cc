@@ -163,14 +163,10 @@ namespace foxbatdb {
         file.flush();
     }
 
-    RecordObject::RecordObject(Meta&& opt) : meta{std::move(opt)} {}
+    RecordObject::RecordObject() : meta{RecordObjectMeta{.logFilePtr = {}}} {}
 
-    std::shared_ptr<RecordObject> RecordObject::New(Meta&& opt,
-                                                    const std::string& k, const std::string& v) {
-        std::shared_ptr<RecordObject> obj{new RecordObject(std::move(opt))};
-        if (!k.empty() && !v.empty())
-            obj->UpdateValue(k, v);
-        return obj;
+    void RecordObject::SetMeta(RecordObjectMeta&& m) {
+        this->meta = std::move(m);
     }
 
     std::string RecordObject::GetValue() const {
@@ -182,6 +178,8 @@ namespace foxbatdb {
     }
 
     void RecordObject::UpdateValue(const std::string& k, const std::string& v) {
+        if (k.empty() || v.empty()) return;
+
         auto logFile = meta.logFilePtr.lock();
         // 当前record文件读指针位置为写入数据之前的写指针位置
         logFile->file.sync();
@@ -276,14 +274,15 @@ namespace foxbatdb {
     std::weak_ptr<RecordObject> StorageEngine::Put(std::error_code& ec,
                                                    const std::string& key, const std::string& val) {
         ec = error::RuntimeErrorCode::kSuccess;
-        RecordObject::Meta opt{.dbIdx = mDBIdx_};
-        auto valObj = RecordObject::New(std::move(opt), key, val);
+        RecordObjectMeta meta{.dbIdx = mDBIdx_};
+        auto valObj = RecordObjectPool::GetInstance().Allocate(std::move(meta)).lock();
         if (!valObj) {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
             return {};
         }
 
+        valObj->UpdateValue(key, val);
         mHATTrieTree_[key] = valObj;
         mMaxMemoryStrategy_->UpdateStateForWriteOp(key);
         return valObj;
@@ -291,17 +290,18 @@ namespace foxbatdb {
 
     std::error_code StorageEngine::InnerPut(const StorageEngine::InnerPutOption& opt,
                                             const std::string& key, const std::string& val) {
-        RecordObject::Meta meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
+        RecordObjectMeta meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
         if (opt.pos != -1) meta.pos = opt.pos;
         if (opt.microSecondTimestamp != 0)
             meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
 
-        auto valObj = RecordObject::New(std::move(meta), key, val);
+        auto valObj = RecordObjectPool::GetInstance().Allocate(std::move(meta)).lock();
         if (!valObj) {
             ServerLog::GetInstance().Error("memory allocate failed");
             return error::RuntimeErrorCode::kMemoryOut;
         }
 
+        valObj->UpdateValue(key, val);
         mHATTrieTree_[key] = valObj;
         return error::RuntimeErrorCode::kSuccess;
     }
@@ -347,6 +347,7 @@ namespace foxbatdb {
         auto valObj = mHATTrieTree_.at_ks(key.data(), key.length());
         valObj->MarkAsDeleted(key);
         mHATTrieTree_.erase_ks(key.data(), key.length());
+        RecordObjectPool::GetInstance().Release(valObj);
         return error::RuntimeErrorCode::kSuccess;
     }
 

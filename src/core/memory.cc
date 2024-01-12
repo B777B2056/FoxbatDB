@@ -1,5 +1,6 @@
 #include "memory.h"
 #include "engine.h"
+#include "flag/flags.h"
 
 namespace foxbatdb {
     void NoevictionStrategy::UpdateStateForReadOp(const std::string&) {}
@@ -39,5 +40,57 @@ namespace foxbatdb {
         if (lruList.empty() || queryMap.empty())
             return false;
         return true;
+    }
+
+    RecordObjectPool::RecordObjectPool() {
+        for (std::size_t i = 0; i < Flags::GetInstance().memorypoolMinSize; ++i) {
+            auto ptr = std::make_shared<RecordObject>();
+            mAllocatedObjects_.emplace_back(ptr);
+            mFreeObjects_.emplace_back(ptr);
+        }
+    }
+
+    void RecordObjectPool::Init() {}
+
+    RecordObjectPool& RecordObjectPool::GetInstance() {
+        static RecordObjectPool instance;
+        return instance;
+    }
+
+    std::weak_ptr<RecordObject> RecordObjectPool::Allocate(RecordObjectMeta&& meta) {
+        if (mFreeObjects_.empty()) {
+            this->ExpandPoolSize();
+        }
+
+        auto freeObj = mFreeObjects_.back();
+        mFreeObjects_.pop_back();
+
+        if (auto ptr = freeObj.lock(); ptr) {
+            ptr->SetMeta(std::move(meta));
+            return ptr;
+        }
+        return {};
+    }
+
+    void RecordObjectPool::Release(std::weak_ptr<RecordObject> ptr) {
+        if (ptr.lock())
+            mFreeObjects_.emplace_back(ptr);
+    }
+
+    void RecordObjectPool::ExpandPoolSize() {
+        auto expandSize = mAllocatedObjects_.size();// ·­±¶
+        for (std::size_t i = 0; i < expandSize; ++i) {
+            auto ptr = std::make_shared<RecordObject>();
+            mAllocatedObjects_.emplace_back(ptr);
+            mFreeObjects_.emplace_back(ptr);
+        }
+    }
+
+    std::size_t RecordObjectPool::GetPoolSize() const {
+        return mAllocatedObjects_.size();
+    }
+
+    std::size_t RecordObjectPool::GetFreeObjectCount() const {
+        return mFreeObjects_.size();
     }
 }// namespace foxbatdb

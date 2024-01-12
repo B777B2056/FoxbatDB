@@ -38,12 +38,14 @@ namespace foxbatdb {
                     {"noeviction", MaxMemoryPolicyEnum::eNoeviction},
                     {"allkeys-lru", MaxMemoryPolicyEnum::eLRU}};
 
-            auto maxMemoryPolicyStr = tbl["memory"]["maxmemory-policy"].value<std::string>().value();
+            auto maxMemoryPolicyStr = tbl["memory"]["maxmemoryPolicy"].value<std::string>().value();
             if (!maxMemoryPolicyMap.contains(maxMemoryPolicyStr))
-                throw std::runtime_error{"invalid maxmemory-policy config"};
+                throw std::runtime_error{"invalid maxmemoryPolicy config"};
 
             this->maxMemoryPolicy = maxMemoryPolicyMap.at(maxMemoryPolicyStr);
         }
+        
+        this->memorypoolMinSize = tbl["memory"]["memorypoolMinSize"].value<std::size_t>().value();
     }
 
     void Flags::Preprocess() {

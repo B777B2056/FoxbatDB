@@ -1,5 +1,7 @@
 #pragma once
+#include <deque>
 #include <list>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -39,5 +41,33 @@ namespace foxbatdb {
         void UpdateStateForWriteOp(const std::string& key) override;
         bool ReleaseKey(StorageEngine* engine) override;
         bool HaveMemoryAvailable() const override;
+    };
+
+    class RecordObject;
+    struct RecordObjectMeta;
+
+    class RecordObjectPool {
+    private:
+        std::deque<std::shared_ptr<RecordObject>> mAllocatedObjects_;
+        std::deque<std::weak_ptr<RecordObject>> mFreeObjects_;
+
+        RecordObjectPool();
+        void ExpandPoolSize();
+
+    public:
+        RecordObjectPool(const RecordObjectPool&) = delete;
+        RecordObjectPool& operator=(const RecordObjectPool&) = delete;
+        RecordObjectPool(RecordObjectPool&&) noexcept = default;
+        RecordObjectPool& operator=(RecordObjectPool&&) = default;
+        ~RecordObjectPool() = default;
+
+        void Init();
+        static RecordObjectPool& GetInstance();
+
+        std::weak_ptr<RecordObject> Allocate(RecordObjectMeta&& meta);
+        void Release(std::weak_ptr<RecordObject> ptr);
+
+        [[maybe_unused]] [[nodiscard]] std::size_t GetPoolSize() const;
+        [[maybe_unused]] [[nodiscard]] std::size_t GetFreeObjectCount() const;
     };
 }// namespace foxbatdb
