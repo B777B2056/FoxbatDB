@@ -21,4 +21,4 @@ valueMaxBytes = 1024
 [memory]
 # maxmemoryPolicy = "noeviction"
 maxmemoryPolicy = "allkeys-lru"
-memorypoolMinSize = 8
+memorypoolMinSize = 4096

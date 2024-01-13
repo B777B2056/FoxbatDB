@@ -13,7 +13,8 @@ namespace foxbatdb::utils {
     std::chrono::steady_clock::time_point MicrosecondTimestampConvertToTimePoint(std::uint64_t timestamp);
     bool IsValidTimestamp(std::uint64_t timestamp);
 
-    constexpr unsigned long long operator"" _MB(unsigned long long m);
+    constexpr unsigned long long operator"" _KB(unsigned long long m) { return m * 1024; }
+    constexpr unsigned long long operator"" _MB(unsigned long long m) { return m * 1024 * 1024; }
 
     static constexpr std::uint32_t CRC_INIT_VALUE = 0xFFFFFFFF;
     std::uint32_t CRC(const char* buf, std::size_t size, std::uint32_t lastCRC = CRC_INIT_VALUE);

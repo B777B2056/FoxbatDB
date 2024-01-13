@@ -21,10 +21,6 @@ namespace foxbatdb::utils {
         return timestamp <= utils::GetMicrosecondTimestamp();
     }
 
-    constexpr unsigned long long operator"" _MB(unsigned long long m) {
-        return m * 1024 * 1024;
-    }
-
     // CRC32Ëã·¨±í
     static std::uint32_t CRC32Table[256];
 

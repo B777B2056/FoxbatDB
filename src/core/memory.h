@@ -1,7 +1,10 @@
 #pragma once
+#include "utils/utils.h"
+#include <array>
 #include <deque>
 #include <list>
 #include <memory>
+#include <memory_resource>
 #include <string>
 #include <unordered_map>
 
@@ -46,10 +49,15 @@ namespace foxbatdb {
     class RecordObject;
     struct RecordObjectMeta;
 
+    using namespace utils;
+
     class RecordObjectPool {
     private:
-        std::deque<std::unique_ptr<RecordObject>> mAllocatedObjects_;
-        std::deque<RecordObject*> mFreeObjects_;
+        std::array<std::byte, 128_KB> mMemoryPoolBuf_;
+        std::pmr::monotonic_buffer_resource mMemoryPool_;
+
+        std::pmr::deque<std::unique_ptr<RecordObject>> mAllocatedObjects_;
+        std::pmr::deque<RecordObject*> mFreeObjects_;
 
         RecordObjectPool();
         void ExpandPoolSize();
@@ -57,8 +65,8 @@ namespace foxbatdb {
     public:
         RecordObjectPool(const RecordObjectPool&) = delete;
         RecordObjectPool& operator=(const RecordObjectPool&) = delete;
-        RecordObjectPool(RecordObjectPool&&) noexcept = default;
-        RecordObjectPool& operator=(RecordObjectPool&&) = default;
+        RecordObjectPool(RecordObjectPool&&) noexcept = delete;
+        RecordObjectPool& operator=(RecordObjectPool&&) = delete;
         ~RecordObjectPool() = default;
 
         void Init();
