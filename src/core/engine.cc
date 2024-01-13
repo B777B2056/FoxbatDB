@@ -272,13 +272,19 @@ namespace foxbatdb {
 
     RecordObject* StorageEngine::Put(std::error_code& ec,
                                      const std::string& key, const std::string& val) {
+        if ((key.size() > Flags::GetInstance().keyMaxBytes) ||
+            (key.size() > Flags::GetInstance().valMaxBytes)) {
+            ec = error::RuntimeErrorCode::kKeyValTooLong;
+            return nullptr;
+        }
+
         ec = error::RuntimeErrorCode::kSuccess;
         RecordObjectMeta meta{.dbIdx = mDBIdx_};
         auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
-            return {};
+            return nullptr;
         }
 
         valObj->UpdateValue(key, val);

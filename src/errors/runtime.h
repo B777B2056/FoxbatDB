@@ -8,6 +8,7 @@ namespace foxbatdb::error {
         kDBIdxOutOfRange,
         kKeyAlreadyExist,
         kKeyNotFound,
+        kKeyValTooLong,
         kMemoryOut,
         kAlreadyInTx,
         kNotInTx,

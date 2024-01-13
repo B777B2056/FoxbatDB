@@ -121,7 +121,7 @@ namespace foxbatdb {
                 return false;
 
             auto tmp = str;
-            detail::Tolower(str);
+            detail::Tolower(tmp);
             if (MainCommandMap.contains(tmp)) {
                 str = std::move(tmp);
                 return true;
@@ -134,7 +134,7 @@ namespace foxbatdb {
                 return false;
 
             auto tmp = str;
-            detail::Tolower(str);
+            detail::Tolower(tmp);
             if (CommandOptionMap.contains(tmp)) {
                 str = std::move(tmp);
                 return true;
@@ -205,6 +205,7 @@ namespace foxbatdb {
 
     void RequestParser::Reset() {
         finished = false;
+        nextParamLength = 0;
         mCurrentState_ = &std::get<detail::ParamCountStartState>(mStates_);
         result.paramCnt = 0;
         result.paramList.clear();
@@ -244,8 +245,10 @@ namespace foxbatdb {
             this->SetCurrentInput(ch);
             this->RunOnce();
 
-            if (this->CheckError())
+            if (this->CheckError()) {
+                this->Reset();
                 return {.ec = error::ProtocolErrorCode::kRequestFormat};
+            }
         }
 
         ParseResult ret{.ec = error::ProtocolErrorCode::kContinue};

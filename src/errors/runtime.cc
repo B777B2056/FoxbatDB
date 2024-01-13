@@ -18,6 +18,9 @@ namespace foxbatdb::error {
             case RuntimeErrorCode::kKeyNotFound:
                 return "Key not found";
 
+            case RuntimeErrorCode::kKeyValTooLong:
+                return "Key or value too long";
+
             case RuntimeErrorCode::kMemoryOut:
                 return "Memory used out";
 
