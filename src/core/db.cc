@@ -144,7 +144,7 @@ namespace foxbatdb {
         }
     }
 
-    void Database::StrSetForHistoryData(DataLogFileObjPtr file, std::streampos pos,
+    void Database::StrSetForHistoryData(DataLogFileWrapper* file, std::streampos pos,
                                         const FileRecord& record) {
         StorageEngine::InnerPutOption opt{
                 .logFilePtr = file,
@@ -167,7 +167,7 @@ namespace foxbatdb {
 
         std::optional<std::string> data = std::nullopt;
         for (const auto& opt: opts) {
-            auto [err, payload] = StrSetWithOption(key, *(obj.lock()), opt);
+            auto [err, payload] = StrSetWithOption(key, *obj, opt);
             if (err) {
                 return std::make_tuple(err, std::nullopt);
             }
@@ -179,7 +179,7 @@ namespace foxbatdb {
         return std::make_tuple(error::ProtocolErrorCode::kSuccess, data);
     }
 
-    void Database::StrSetForMerge(DataLogFileObjPtr mergeFile,
+    void Database::StrSetForMerge(DataLogFileWrapper* mergeFile,
                                   const std::string& key, const std::string& val) {
         auto ec = mEngine_.InnerPut(StorageEngine::InnerPutOption{.logFilePtr = mergeFile}, key, val);
         if (ec) {
@@ -223,7 +223,7 @@ namespace foxbatdb {
                 // 保留设置前指定键的生存时间
                 if (mEngine_.Contains(key)) {
                     auto oldObj = mEngine_.Get(key);
-                    obj.SetExpiration(oldObj.lock()->GetExpiration());
+                    obj.SetExpiration(oldObj->GetExpiration());
                 }
                 break;
             case CmdOptionType::kGET:
@@ -254,7 +254,7 @@ namespace foxbatdb {
         return mEngine_.Del(key);
     }
 
-    std::weak_ptr<RecordObject> Database::Get(const std::string& key) {
+    RecordObject* Database::Get(const std::string& key) {
         return mEngine_.Get(key);
     }
 

@@ -165,8 +165,8 @@ namespace foxbatdb {
 
     RecordObject::RecordObject() : meta{RecordObjectMeta{.logFilePtr = {}}} {}
 
-    void RecordObject::SetMeta(RecordObjectMeta&& m) {
-        this->meta = std::move(m);
+    void RecordObject::SetMeta(const RecordObjectMeta& m) {
+        this->meta = m;
     }
 
     std::string RecordObject::GetValue() const {
@@ -180,7 +180,7 @@ namespace foxbatdb {
     void RecordObject::UpdateValue(const std::string& k, const std::string& v) {
         if (k.empty() || v.empty()) return;
 
-        auto logFile = meta.logFilePtr.lock();
+        auto logFile = meta.logFilePtr;
         // 当前record文件读指针位置为写入数据之前的写指针位置
         logFile->file.sync();
         meta.pos = logFile->file.tellp();
@@ -192,21 +192,20 @@ namespace foxbatdb {
         UpdateValue(k, "");
     }
 
-    DataLogFileObjPtr RecordObject::GetDataLogFileHandler() const {
+    DataLogFileWrapper* RecordObject::GetDataLogFileHandler() const {
         return meta.logFilePtr;
     }
 
     bool RecordObject::ConvertToFileRecord(FileRecord& record) const {
-        return FileRecord::LoadFromDisk(record, meta.logFilePtr.lock()->file, meta.pos);
+        return FileRecord::LoadFromDisk(record, meta.logFilePtr->file, meta.pos);
     }
 
-    bool RecordObject::IsInTargetDataLogFile(DataLogFileObjPtr targetFilePtr) const {
-        auto targetFile = targetFilePtr.lock();
-        auto logFile = meta.logFilePtr.lock();
-        if (!targetFile || !logFile) {
+    bool RecordObject::IsInTargetDataLogFile(DataLogFileWrapper* targetFilePtr) const {
+        auto logFile = meta.logFilePtr;
+        if (!targetFilePtr || !logFile) {
             return false;
         }
-        return &targetFile->file == &logFile->file;
+        return &targetFilePtr->file == &logFile->file;
     }
 
     std::fstream::pos_type RecordObject::GetFileOffset() const {
@@ -267,15 +266,15 @@ namespace foxbatdb {
         else
             assert(0 != txCmdNum);
         auto& logFileManager = DataLogFileManager::GetInstance();
-        auto& targetLogFile = logFileManager.GetAvailableLogFile().lock()->file;
+        auto& targetLogFile = logFileManager.GetAvailableLogFile()->file;
         FileRecord::DumpTxFlagToDisk(targetLogFile, mDBIdx_, txFlag, txCmdNum);
     }
 
-    std::weak_ptr<RecordObject> StorageEngine::Put(std::error_code& ec,
-                                                   const std::string& key, const std::string& val) {
+    RecordObject* StorageEngine::Put(std::error_code& ec,
+                                     const std::string& key, const std::string& val) {
         ec = error::RuntimeErrorCode::kSuccess;
         RecordObjectMeta meta{.dbIdx = mDBIdx_};
-        auto valObj = RecordObjectPool::GetInstance().Acquire(std::move(meta)).lock();
+        auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
@@ -295,7 +294,7 @@ namespace foxbatdb {
         if (opt.microSecondTimestamp != 0)
             meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
 
-        auto valObj = RecordObjectPool::GetInstance().Acquire(std::move(meta)).lock();
+        auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             return error::RuntimeErrorCode::kMemoryOut;
@@ -312,16 +311,16 @@ namespace foxbatdb {
 
     std::string StorageEngine::Get(std::error_code& ec, const std::string& key) {
         auto valObj = this->Get(key);
-        if (!valObj.lock()) {
+        if (!valObj) {
             ec = error::RuntimeErrorCode::kKeyNotFound;
             return {};
         }
 
         ec = error::RuntimeErrorCode::kSuccess;
-        return valObj.lock()->GetValue();
+        return valObj->GetValue();
     }
 
-    std::weak_ptr<RecordObject> StorageEngine::Get(const std::string& key) {
+    RecordObject* StorageEngine::Get(const std::string& key) {
         if (!mHATTrieTree_.count(key)) {
             return {};
         }

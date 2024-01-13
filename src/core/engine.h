@@ -68,7 +68,7 @@ namespace foxbatdb {
 
     struct L1_CACHE_LINE_ALIGNAS RecordObjectMeta {
         std::uint8_t dbIdx = 0;
-        DataLogFileObjPtr logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
+        DataLogFileWrapper* logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
         std::streampos pos = -1;
         std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
         std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
@@ -82,14 +82,14 @@ namespace foxbatdb {
     public:
         RecordObject();
 
-        void SetMeta(RecordObjectMeta&& m);
+        void SetMeta(const RecordObjectMeta& m);
         void UpdateValue(const std::string& k, const std::string& v);
 
         [[nodiscard]] std::string GetValue() const;
         void MarkAsDeleted(const std::string& k);
 
-        [[nodiscard]] DataLogFileObjPtr GetDataLogFileHandler() const;
-        [[nodiscard]] bool IsInTargetDataLogFile(DataLogFileObjPtr targetFilePtr) const;
+        [[nodiscard]] DataLogFileWrapper* GetDataLogFileHandler() const;
+        [[nodiscard]] bool IsInTargetDataLogFile(DataLogFileWrapper* targetFilePtr) const;
         [[nodiscard]] std::fstream::pos_type GetFileOffset() const;
 
         void SetExpiration(std::chrono::seconds sec);
@@ -104,17 +104,15 @@ namespace foxbatdb {
 
     class StorageEngine {
     private:
-        using RecordObjectPtr = std::shared_ptr<RecordObject>;
-
         std::uint8_t mDBIdx_;
         MaxMemoryStrategy* mMaxMemoryStrategy_;
-        tsl::htrie_map<char, RecordObjectPtr> mHATTrieTree_;
+        tsl::htrie_map<char, RecordObject*> mHATTrieTree_;
 
     public:
         using ForeachCallback = std::function<void(const std::string&, const RecordObject&)>;
 
         struct InnerPutOption {
-            DataLogFileObjPtr logFilePtr{};
+            DataLogFileWrapper* logFilePtr = nullptr;
             std::streampos pos = -1;
             std::uint64_t microSecondTimestamp = 0;
         };
@@ -132,14 +130,14 @@ namespace foxbatdb {
 
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0) const;
 
-        std::weak_ptr<RecordObject> Put(std::error_code& ec, const std::string& key, const std::string& val);
+        RecordObject* Put(std::error_code& ec, const std::string& key, const std::string& val);
         std::error_code InnerPut(const InnerPutOption& opt,
                                  const std::string& key, const std::string& val);
 
         [[nodiscard]] bool Contains(const std::string& key) const;
 
         std::string Get(std::error_code& ec, const std::string& key);
-        std::weak_ptr<RecordObject> Get(const std::string& key);
+        RecordObject* Get(const std::string& key);
 
         std::error_code Del(const std::string& key);
         [[nodiscard]] std::vector<std::string> PrefixSearch(const std::string& prefix) const;

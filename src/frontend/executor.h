@@ -1,6 +1,5 @@
 #pragma once
 #include "cmdmap.h"
-#include "log/datalog.h"
 #include <cstdint>
 #include <deque>
 #include <memory>
@@ -12,6 +11,7 @@ namespace foxbatdb {
     class CMDSession;
     class Database;
     class ParseResult;
+    struct DataLogFileWrapper;
 
     enum class TxState : std::int8_t {
         kNoTx = 0,
@@ -24,7 +24,7 @@ namespace foxbatdb {
     class CMDExecutor {
     private:
         struct TxUndoInfo {
-            DataLogFileObjPtr dbFile;
+            DataLogFileWrapper* dbFile;
             std::streampos readPos;
         };
 

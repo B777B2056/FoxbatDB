@@ -98,7 +98,7 @@ namespace foxbatdb {
     }
 
     void CMDExecutor::AppendUndoLog(const Command& cmd) {
-        auto valObj = mDB_->Get(cmd.argv[0]).lock();
+        auto valObj = mDB_->Get(cmd.argv[0]);
         if (!valObj) {
             return;
         }
@@ -114,7 +114,7 @@ namespace foxbatdb {
         std::for_each(mTxUndo_.rbegin(), mTxUndo_.rend(),
                       [this](const TxUndoInfo& info) -> void {
                           FileRecord data;
-                          if (FileRecord::LoadFromDisk(data, info.dbFile.lock()->file, info.readPos))
+                          if (FileRecord::LoadFromDisk(data, info.dbFile->file, info.readPos))
                               mDB_->StrSetForHistoryData(info.dbFile, info.readPos, data);
                       });
         CancelTxMode();

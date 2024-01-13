@@ -49,7 +49,7 @@ namespace foxbatdb {
                 ServerLog::GetInstance().Fatal("log file create failed: {}", ::strerror(errno));
             }
             mLogFilePool_.emplace_back(
-                    std::make_shared<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
         }
         mAvailableNode_ = mLogFilePool_.begin();
     }
@@ -61,12 +61,12 @@ namespace foxbatdb {
 
     void DataLogFileManager::Init() {}
 
-    DataLogFileObjPtr DataLogFileManager::GetAvailableLogFile() {
+    DataLogFileWrapper* DataLogFileManager::GetAvailableLogFile() {
         if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
             if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
                 PoolExpand();
         }
-        return *mAvailableNode_;
+        return mAvailableNode_->get();
     }
 
     void DataLogFileManager::PoolExpand() {
@@ -81,7 +81,7 @@ namespace foxbatdb {
             }
 
             mLogFilePool_.emplace_back(
-                    std::make_shared<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
         }
 
         if (std::next(mAvailableNode_, 1) != mLogFilePool_.end()) {
@@ -89,7 +89,7 @@ namespace foxbatdb {
         }
     }
 
-    bool DataLogFileManager::LoadHistoryTxFromDisk(std::shared_ptr<DataLogFileWrapper> fileWrapper,
+    bool DataLogFileManager::LoadHistoryTxFromDisk(DataLogFileWrapper* fileWrapper,
                                                    std::uint64_t txNum) {
         auto& file = fileWrapper->file;
         auto& dbm = DatabaseManager::GetInstance();
@@ -153,7 +153,7 @@ namespace foxbatdb {
                 continue;
             }
             mLogFilePool_.emplace_back(
-                    std::make_shared<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
         }
 
         // 依次读文件填充dict
@@ -168,14 +168,14 @@ namespace foxbatdb {
                     // 恢复普通数据记录
                     if (record.header.valSize > 0) {
                         dbm.GetDBByIndex(record.header.dbIdx)
-                                ->StrSetForHistoryData(fileWrapper, pos, record);
+                                ->StrSetForHistoryData(fileWrapper.get(), pos, record);
                     }
                 } else {
                     // 恢复事务记录
                     if (TxRuntimeState::kBegin != record.header.txRuntimeState)
                         break;
 
-                    if (!LoadHistoryTxFromDisk(fileWrapper, record.header.keySize))
+                    if (!LoadHistoryTxFromDisk(fileWrapper.get(), record.header.keySize))
                         break;
                 }
             }
@@ -201,7 +201,7 @@ namespace foxbatdb {
         // 向文件池插入merge文件
         auto savedMergeFileNode = mLogFilePool_.insert(
                 currentAvailableNode,
-                std::make_shared<DataLogFileWrapper>(mergeFileName, std::move(mergeFile)));
+                std::make_unique<DataLogFileWrapper>(mergeFileName, std::move(mergeFile)));
 
         // 合并db文件
         auto& dbm = DatabaseManager::GetInstance();
@@ -211,11 +211,11 @@ namespace foxbatdb {
             db->Foreach(
                     [db, currentAvailableNode, savedMergeFileNode](const std::string& key, const RecordObject& valObj) -> void {
                         // 不合并当前正可用的db文件
-                        if (valObj.IsInTargetDataLogFile(*currentAvailableNode))
+                        if (valObj.IsInTargetDataLogFile(currentAvailableNode->get()))
                             return;
                         // 将活跃的key和记录写入merge文件内后，再更新内存索引
                         if (auto val = valObj.GetValue(); !val.empty())
-                            db->StrSetForMerge(*savedMergeFileNode, key, val);
+                            db->StrSetForMerge(savedMergeFileNode->get(), key, val);
                     });
         }
 

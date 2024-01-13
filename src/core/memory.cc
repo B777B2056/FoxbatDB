@@ -44,9 +44,9 @@ namespace foxbatdb {
 
     RecordObjectPool::RecordObjectPool() {
         for (std::size_t i = 0; i < Flags::GetInstance().memorypoolMinSize; ++i) {
-            auto ptr = std::make_shared<RecordObject>();
-            mAllocatedObjects_.emplace_back(ptr);
-            mFreeObjects_.emplace_back(ptr);
+            auto ptr = std::make_unique<RecordObject>();
+            mFreeObjects_.emplace_back(ptr.get());
+            mAllocatedObjects_.emplace_back(std::move(ptr));
         }
     }
 
@@ -57,7 +57,7 @@ namespace foxbatdb {
         return instance;
     }
 
-    std::weak_ptr<RecordObject> RecordObjectPool::Acquire(RecordObjectMeta&& meta) {
+    RecordObject* RecordObjectPool::Acquire(const RecordObjectMeta& meta) {
         if (mFreeObjects_.empty()) {
             this->ExpandPoolSize();
         }
@@ -65,24 +65,24 @@ namespace foxbatdb {
         auto freeObj = mFreeObjects_.back();
         mFreeObjects_.pop_back();
 
-        if (auto ptr = freeObj.lock(); ptr) {
-            ptr->SetMeta(std::move(meta));
-            return ptr;
+        if (freeObj) {
+            freeObj->SetMeta(meta);
+            return freeObj;
         }
         return {};
     }
 
-    void RecordObjectPool::Release(std::weak_ptr<RecordObject> ptr) {
-        if (ptr.lock())
+    void RecordObjectPool::Release(RecordObject* ptr) {
+        if (ptr)
             mFreeObjects_.emplace_back(ptr);
     }
 
     void RecordObjectPool::ExpandPoolSize() {
         auto expandSize = mAllocatedObjects_.size();// ·­±¶
         for (std::size_t i = 0; i < expandSize; ++i) {
-            auto ptr = std::make_shared<RecordObject>();
-            mAllocatedObjects_.emplace_back(ptr);
-            mFreeObjects_.emplace_back(ptr);
+            auto ptr = std::make_unique<RecordObject>();
+            mFreeObjects_.emplace_back(ptr.get());
+            mAllocatedObjects_.emplace_back(std::move(ptr));
         }
     }
 

@@ -10,16 +10,14 @@ namespace foxbatdb {
         std::fstream file;
     };
 
-    using DataLogFileObjPtr = std::weak_ptr<DataLogFileWrapper>;
-
     class DataLogFileManager {
     private:
-        std::list<std::shared_ptr<DataLogFileWrapper>> mLogFilePool_;
-        std::list<std::shared_ptr<DataLogFileWrapper>>::iterator mAvailableNode_;
+        std::list<std::unique_ptr<DataLogFileWrapper>> mLogFilePool_;
+        std::list<std::unique_ptr<DataLogFileWrapper>>::iterator mAvailableNode_;
 
         DataLogFileManager();
         void PoolExpand();
-        static bool LoadHistoryTxFromDisk(std::shared_ptr<DataLogFileWrapper> fileWrapper, std::uint64_t txNum);
+        static bool LoadHistoryTxFromDisk(DataLogFileWrapper* fileWrapper, std::uint64_t txNum);
         void LoadHistoryRecordsFromDisk();
 
     public:
@@ -28,7 +26,7 @@ namespace foxbatdb {
         ~DataLogFileManager() = default;
         static DataLogFileManager& GetInstance();
         void Init();
-        DataLogFileObjPtr GetAvailableLogFile();
+        DataLogFileWrapper* GetAvailableLogFile();
         void Merge();
     };
 }// namespace foxbatdb

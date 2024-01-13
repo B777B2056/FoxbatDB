@@ -48,8 +48,8 @@ namespace foxbatdb {
 
     class RecordObjectPool {
     private:
-        std::deque<std::shared_ptr<RecordObject>> mAllocatedObjects_;
-        std::deque<std::weak_ptr<RecordObject>> mFreeObjects_;
+        std::deque<std::unique_ptr<RecordObject>> mAllocatedObjects_;
+        std::deque<RecordObject*> mFreeObjects_;
 
         RecordObjectPool();
         void ExpandPoolSize();
@@ -64,8 +64,8 @@ namespace foxbatdb {
         void Init();
         static RecordObjectPool& GetInstance();
 
-        std::weak_ptr<RecordObject> Acquire(RecordObjectMeta&& meta);
-        void Release(std::weak_ptr<RecordObject> ptr);
+        RecordObject* Acquire(const RecordObjectMeta& meta);
+        void Release(RecordObject* ptr);
 
         [[maybe_unused]] [[nodiscard]] std::size_t GetPoolSize() const;
         [[maybe_unused]] [[nodiscard]] std::size_t GetFreeObjectCount() const;
