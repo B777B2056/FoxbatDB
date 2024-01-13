@@ -15,8 +15,8 @@ dbFileDirectory = "/mnt/e/jr/FoxbatDB/out/log/db"
 dbFileMaxSizeMB = 512
 
 [keyval]
-keyMaxBytes = 1024
-valueMaxBytes = 1024
+keyMaxBytes = 10240
+valueMaxBytes = 10240
 
 [memory]
 # maxmemoryPolicy = "noeviction"
