@@ -369,8 +369,17 @@ namespace foxbatdb {
     }
 
     void StorageEngine::Foreach(ForeachCallback&& callback) {
+        std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
+            if (it.value()->IsExpired()) {
+                expiredKeyList.emplace_back(it.key());
+                RecordObjectPool::GetInstance().Release(it.value());
+                continue;
+            }
             callback(it.key(), *(it.value()));
         }
+
+        for (auto&& key: expiredKeyList)
+            mHATTrieTree_.erase_ks(key.data(), key.length());
     }
 }// namespace foxbatdb
