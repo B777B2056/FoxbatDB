@@ -15,5 +15,5 @@ enable_testing()
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TEST_ROOT_DIR)
 file(GLOB_RECURSE TOOLS_TEST_SRC "${TEST_ROOT_DIR}/tools/*.cc")
 
-add_executable(foxbatdb_benchmark_embedded "benchmark.cc" ${SRC} ${TOOLS_TEST_SRC})
-target_link_libraries(foxbatdb_benchmark_embedded PRIVATE Threads::Threads benchmark::benchmark spdlog::spdlog)
+add_executable(foxbatdb_benchmark "benchmark.cc" ${SRC} ${TOOLS_TEST_SRC})
+target_link_libraries(foxbatdb_benchmark PRIVATE Threads::Threads benchmark::benchmark spdlog::spdlog)
