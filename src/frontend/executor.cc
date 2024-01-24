@@ -99,14 +99,12 @@ namespace foxbatdb {
 
     void CMDExecutor::AppendUndoLog(const Command& cmd) {
         auto valObj = mDB_->Get(cmd.argv[0]);
-        if (!valObj) {
-            return;
-        }
+        if (valObj.expired()) return;
 
         mTxUndo_.emplace_back(
                 TxUndoInfo{
-                        .dbFile = valObj->GetDataLogFileHandler(),
-                        .readPos = valObj->GetFileOffset(),
+                        .dbFile = valObj.lock()->GetDataLogFileHandler(),
+                        .readPos = valObj.lock()->GetFileOffset(),
                 });
     }
 

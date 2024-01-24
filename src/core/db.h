@@ -44,7 +44,7 @@ namespace foxbatdb {
 
     class Database {
     private:
-        StorageEngine mEngine_;
+        MemoryIndex mIndex_;
         std::unordered_map<std::string, std::vector<std::weak_ptr<CMDSession>>> mWatchedMap_;
 
         std::tuple<std::error_code, std::optional<std::string>> StrSetWithOption(
@@ -63,7 +63,7 @@ namespace foxbatdb {
         void ReleaseMemory();
         bool HaveMemoryAvailable() const;
 
-        void Foreach(StorageEngine::ForeachCallback&& callback);
+        void Foreach(MemoryIndex::ForeachCallback&& callback);
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
 
         void StrSetForHistoryData(DataLogFileWrapper* file, std::streampos pos,
@@ -75,7 +75,7 @@ namespace foxbatdb {
                             const std::string& key, const std::string& val);
         std::optional<std::string> StrGet(const std::string& key);
         std::error_code Del(const std::string& key);
-        RecordObject* Get(const std::string& key);
+        std::weak_ptr<RecordObject> Get(const std::string& key);
 
         void AddWatchKeyWithClient(const std::string& key, std::weak_ptr<CMDSession> clt);
         void DelWatchKeyAndClient(const std::string& key);

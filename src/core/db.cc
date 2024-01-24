@@ -116,22 +116,22 @@ namespace foxbatdb {
     }
 
     Database::Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
-        : mEngine_{dbIdx, maxMemoryStrategy} {}
+        : mIndex_{dbIdx, maxMemoryStrategy} {}
 
     void Database::ReleaseMemory() {
-        mEngine_.ReleaseMemory();
+        mIndex_.ReleaseMemory();
     }
 
     bool Database::HaveMemoryAvailable() const {
-        return mEngine_.HaveMemoryAvailable();
+        return mIndex_.HaveMemoryAvailable();
     }
 
-    void Database::Foreach(StorageEngine::ForeachCallback&& callback) {
-        mEngine_.Foreach(std::move(callback));
+    void Database::Foreach(MemoryIndex::ForeachCallback&& callback) {
+        mIndex_.Foreach(std::move(callback));
     }
 
     void Database::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) {
-        mEngine_.InsertTxFlag(txFlag, txCmdNum);
+        mIndex_.InsertTxFlag(txFlag, txCmdNum);
     }
 
     void Database::NotifyWatchedClientSession(const std::string& key) {
@@ -146,11 +146,11 @@ namespace foxbatdb {
 
     void Database::StrSetForHistoryData(DataLogFileWrapper* file, std::streampos pos,
                                         const FileRecord& record) {
-        StorageEngine::InnerPutOption opt{
+        MemoryIndex::InnerPutOption opt{
                 .logFilePtr = file,
                 .pos = pos,
                 .microSecondTimestamp = record.header.timestamp};
-        auto ec = mEngine_.InnerPut(opt, record.data.key, "");
+        auto ec = mIndex_.InnerPut(opt, record.data.key, "");
         if (ec) {
             ServerLog::GetInstance().Warning("load history data failed: []", ec.message());
         }
@@ -160,14 +160,14 @@ namespace foxbatdb {
             const std::string& key, const std::string& val,
             const std::vector<CommandOption>& opts) {
         std::error_code ec;
-        auto obj = mEngine_.Put(ec, key, val);
+        auto obj = mIndex_.Put(ec, key, val);
         if (ec) {
             return std::make_tuple(ec, std::nullopt);
         }
 
         std::optional<std::string> data = std::nullopt;
         for (const auto& opt: opts) {
-            auto [err, payload] = StrSetWithOption(key, *obj, opt);
+            auto [err, payload] = StrSetWithOption(key, *obj.lock(), opt);
             if (err) {
                 return std::make_tuple(err, std::nullopt);
             }
@@ -181,7 +181,7 @@ namespace foxbatdb {
 
     void Database::StrSetForMerge(DataLogFileWrapper* mergeFile,
                                   const std::string& key, const std::string& val) {
-        auto ec = mEngine_.InnerPut(StorageEngine::InnerPutOption{.logFilePtr = mergeFile}, key, val);
+        auto ec = mIndex_.InnerPut(MemoryIndex::InnerPutOption{.logFilePtr = mergeFile}, key, val);
         if (ec) {
             ServerLog::GetInstance().Error("merge file insert key [] failed: []", key, ec.message());
         }
@@ -210,25 +210,26 @@ namespace foxbatdb {
                 }
             } break;
             case CmdOptionType::kNX:
-                if (mEngine_.Contains(key)) {
+                if (mIndex_.Contains(key)) {
                     err = error::RuntimeErrorCode::kKeyAlreadyExist;
                 }
                 break;
             case CmdOptionType::kXX:
-                if (!mEngine_.Contains(key)) {
+                if (!mIndex_.Contains(key)) {
                     err = error::RuntimeErrorCode::kKeyNotFound;
                 }
                 break;
             case CmdOptionType::kKEEPTTL:
                 // 保留设置前指定键的生存时间
-                if (mEngine_.Contains(key)) {
-                    auto oldObj = mEngine_.Get(key);
-                    obj.SetExpiration(oldObj->GetExpiration());
+                if (mIndex_.Contains(key)) {
+                    auto oldObj = mIndex_.Get(key);
+                    if (!oldObj.expired())
+                        obj.SetExpiration(oldObj.lock()->GetExpiration());
                 }
                 break;
             case CmdOptionType::kGET:
                 // 返回 key 存储的值，如果 key 不存在返回空
-                if (mEngine_.Contains(key)) {
+                if (mIndex_.Contains(key)) {
                     data = StrGet(key);
                 } else {
                     data = {"nil"};
@@ -242,7 +243,7 @@ namespace foxbatdb {
 
     std::optional<std::string> Database::StrGet(const std::string& key) {
         std::error_code ec;
-        auto val = mEngine_.Get(ec, key);
+        auto val = mIndex_.Get(ec, key);
         if (ec) {
             return {};
         }
@@ -251,15 +252,15 @@ namespace foxbatdb {
 
     std::error_code Database::Del(const std::string& key) {
         NotifyWatchedClientSession(key);
-        return mEngine_.Del(key);
+        return mIndex_.Del(key);
     }
 
-    RecordObject* Database::Get(const std::string& key) {
-        return mEngine_.Get(key);
+    std::weak_ptr<RecordObject> Database::Get(const std::string& key) {
+        return mIndex_.Get(key);
     }
 
     void Database::AddWatchKeyWithClient(const std::string& key, std::weak_ptr<CMDSession> clt) {
-        if (!mEngine_.Contains(key))
+        if (!mIndex_.Contains(key))
             return;
 
         auto cltPtr = clt.lock();
@@ -270,12 +271,12 @@ namespace foxbatdb {
     }
 
     void Database::DelWatchKeyAndClient(const std::string& key) {
-        if (!mEngine_.Contains(key))
+        if (!mIndex_.Contains(key))
             return;
         mWatchedMap_.erase(key);
     }
 
     std::vector<std::string> Database::PrefixSearch(const std::string& prefix) const {
-        return mEngine_.PrefixSearch(prefix);
+        return mIndex_.PrefixSearch(prefix);
     }
 }// namespace foxbatdb

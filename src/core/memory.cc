@@ -5,7 +5,7 @@
 namespace foxbatdb {
     void NoevictionStrategy::UpdateStateForReadOp(const std::string&) {}
     void NoevictionStrategy::UpdateStateForWriteOp(const std::string&) {}
-    bool NoevictionStrategy::ReleaseKey(StorageEngine*) { return false; }
+    bool NoevictionStrategy::ReleaseKey(MemoryIndex*) { return false; }
     bool NoevictionStrategy::HaveMemoryAvailable() const { return false; }
 
     void LRUStrategy::Update(const std::string& key) const {
@@ -26,7 +26,7 @@ namespace foxbatdb {
         Update(key);
     }
 
-    bool LRUStrategy::ReleaseKey(StorageEngine* engine) {
+    bool LRUStrategy::ReleaseKey(MemoryIndex* engine) {
         auto& key = lruList.back();
         if (engine->Del(key)) {
             return false;
@@ -60,7 +60,7 @@ namespace foxbatdb {
         return instance;
     }
 
-    RecordObject* RecordObjectPool::Acquire(const RecordObjectMeta& meta) {
+    std::shared_ptr<RecordObject> RecordObjectPool::Acquire(const RecordObjectMeta& meta) {
         if (mFreeObjects_.empty()) {
             this->ExpandPoolSize();
         }
@@ -70,7 +70,8 @@ namespace foxbatdb {
 
         if (freeObj) {
             freeObj->SetMeta(meta);
-            return freeObj;
+            return std::shared_ptr<RecordObject>{freeObj,
+                                                 [this](RecordObject* ptr) { this->Release(ptr); }};
         }
         return {};
     }

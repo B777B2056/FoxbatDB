@@ -232,17 +232,17 @@ namespace foxbatdb {
         return std::chrono::steady_clock::now() >= exTime;
     }
 
-    StorageEngine::StorageEngine(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
+    MemoryIndex::MemoryIndex(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
         : mDBIdx_{dbIdx}, mMaxMemoryStrategy_{maxMemoryStrategy} {
         assert(nullptr != mMaxMemoryStrategy_);
     }
 
-    StorageEngine::StorageEngine(StorageEngine&& rhs) noexcept
+    MemoryIndex::MemoryIndex(MemoryIndex&& rhs) noexcept
         : mDBIdx_{rhs.mDBIdx_}, mMaxMemoryStrategy_{rhs.mMaxMemoryStrategy_}, mHATTrieTree_{std::move(rhs.mHATTrieTree_)} {
         rhs.mMaxMemoryStrategy_ = nullptr;
     }
 
-    StorageEngine& StorageEngine::operator=(StorageEngine&& rhs) noexcept {
+    MemoryIndex& MemoryIndex::operator=(MemoryIndex&& rhs) noexcept {
         if (this != &rhs) {
             mDBIdx_ = rhs.mDBIdx_;
             mMaxMemoryStrategy_ = rhs.mMaxMemoryStrategy_;
@@ -252,15 +252,15 @@ namespace foxbatdb {
         return *this;
     }
 
-    void StorageEngine::ReleaseMemory() {
+    void MemoryIndex::ReleaseMemory() {
         mMaxMemoryStrategy_->ReleaseKey(this);
     }
 
-    bool StorageEngine::HaveMemoryAvailable() const {
+    bool MemoryIndex::HaveMemoryAvailable() const {
         return mMaxMemoryStrategy_->HaveMemoryAvailable();
     }
 
-    void StorageEngine::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) const {
+    void MemoryIndex::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) const {
         if (TxRuntimeState::kBegin != txFlag)
             assert(0 == txCmdNum);
         else
@@ -270,12 +270,12 @@ namespace foxbatdb {
         FileRecord::DumpTxFlagToDisk(targetLogFile, mDBIdx_, txFlag, txCmdNum);
     }
 
-    RecordObject* StorageEngine::Put(std::error_code& ec,
-                                     const std::string& key, const std::string& val) {
+    std::weak_ptr<RecordObject> MemoryIndex::Put(std::error_code& ec,
+                                                 const std::string& key, const std::string& val) {
         if ((key.size() > Flags::GetInstance().keyMaxBytes) ||
             (key.size() > Flags::GetInstance().valMaxBytes)) {
             ec = error::RuntimeErrorCode::kKeyValTooLong;
-            return nullptr;
+            return {};
         }
 
         ec = error::RuntimeErrorCode::kSuccess;
@@ -284,7 +284,7 @@ namespace foxbatdb {
         if (!valObj) [[unlikely]] {
             ServerLog::GetInstance().Error("memory allocate failed");
             ec = error::RuntimeErrorCode::kMemoryOut;
-            return nullptr;
+            return {};
         }
 
         valObj->UpdateValue(key, val);
@@ -293,8 +293,8 @@ namespace foxbatdb {
         return valObj;
     }
 
-    std::error_code StorageEngine::InnerPut(const StorageEngine::InnerPutOption& opt,
-                                            const std::string& key, const std::string& val) {
+    std::error_code MemoryIndex::InnerPut(const MemoryIndex::InnerPutOption& opt,
+                                          const std::string& key, const std::string& val) {
         RecordObjectMeta meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
         if (opt.pos != -1) meta.pos = opt.pos;
         if (opt.microSecondTimestamp != 0)
@@ -311,22 +311,22 @@ namespace foxbatdb {
         return error::RuntimeErrorCode::kSuccess;
     }
 
-    bool StorageEngine::Contains(const std::string& key) const {
+    bool MemoryIndex::Contains(const std::string& key) const {
         return mHATTrieTree_.count_ks(key.data(), key.length()) > 0;
     }
 
-    std::string StorageEngine::Get(std::error_code& ec, const std::string& key) {
+    std::string MemoryIndex::Get(std::error_code& ec, const std::string& key) {
         auto valObj = this->Get(key);
-        if (!valObj) {
+        if (valObj.expired()) {
             ec = error::RuntimeErrorCode::kKeyNotFound;
             return {};
         }
 
         ec = error::RuntimeErrorCode::kSuccess;
-        return valObj->GetValue();
+        return valObj.lock()->GetValue();
     }
 
-    RecordObject* StorageEngine::Get(const std::string& key) {
+    std::weak_ptr<RecordObject> MemoryIndex::Get(const std::string& key) {
         if (!mHATTrieTree_.count(key)) {
             return {};
         }
@@ -344,7 +344,7 @@ namespace foxbatdb {
         return valObj;
     }
 
-    std::error_code StorageEngine::Del(const std::string& key) {
+    std::error_code MemoryIndex::Del(const std::string& key) {
         if (!mHATTrieTree_.count_ks(key.data(), key.length())) {
             return error::RuntimeErrorCode::kKeyNotFound;
         }
@@ -352,11 +352,10 @@ namespace foxbatdb {
         auto valObj = mHATTrieTree_.at_ks(key.data(), key.length());
         valObj->MarkAsDeleted(key);
         mHATTrieTree_.erase_ks(key.data(), key.length());
-        RecordObjectPool::GetInstance().Release(valObj);
         return error::RuntimeErrorCode::kSuccess;
     }
 
-    std::vector<std::string> StorageEngine::PrefixSearch(const std::string& prefix) const {
+    std::vector<std::string> MemoryIndex::PrefixSearch(const std::string& prefix) const {
         std::vector<std::string> ret;
         auto prefixRange = mHATTrieTree_.equal_prefix_range({prefix.data(), prefix.length()});
         for (auto it = prefixRange.first; it != prefixRange.second; ++it) {
@@ -368,12 +367,11 @@ namespace foxbatdb {
         return ret;
     }
 
-    void StorageEngine::Foreach(ForeachCallback&& callback) {
+    void MemoryIndex::Foreach(ForeachCallback&& callback) {
         std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
             if (it.value()->IsExpired()) {
                 expiredKeyList.emplace_back(it.key());
-                RecordObjectPool::GetInstance().Release(it.value());
                 continue;
             }
             callback(it.key(), *(it.value()));

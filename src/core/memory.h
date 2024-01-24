@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 namespace foxbatdb {
-    class StorageEngine;
+    class MemoryIndex;
 
     class MaxMemoryStrategy {
     public:
@@ -18,7 +18,7 @@ namespace foxbatdb {
 
         virtual void UpdateStateForReadOp(const std::string& key) = 0;
         virtual void UpdateStateForWriteOp(const std::string& key) = 0;
-        virtual bool ReleaseKey(StorageEngine* engine) = 0;
+        virtual bool ReleaseKey(MemoryIndex* engine) = 0;
         [[nodiscard]] virtual bool HaveMemoryAvailable() const = 0;
     };
 
@@ -27,7 +27,7 @@ namespace foxbatdb {
         using MaxMemoryStrategy::MaxMemoryStrategy;
         void UpdateStateForReadOp(const std::string&) override;
         void UpdateStateForWriteOp(const std::string&) override;
-        bool ReleaseKey(StorageEngine*) override;
+        bool ReleaseKey(MemoryIndex*) override;
         [[nodiscard]] bool HaveMemoryAvailable() const override;
     };
 
@@ -42,7 +42,7 @@ namespace foxbatdb {
         using MaxMemoryStrategy::MaxMemoryStrategy;
         void UpdateStateForReadOp(const std::string& key) override;
         void UpdateStateForWriteOp(const std::string& key) override;
-        bool ReleaseKey(StorageEngine* engine) override;
+        bool ReleaseKey(MemoryIndex* engine) override;
         bool HaveMemoryAvailable() const override;
     };
 
@@ -61,6 +61,7 @@ namespace foxbatdb {
 
         RecordObjectPool();
         void ExpandPoolSize();
+        void Release(RecordObject* ptr);
 
     public:
         RecordObjectPool(const RecordObjectPool&) = delete;
@@ -72,8 +73,7 @@ namespace foxbatdb {
         void Init();
         static RecordObjectPool& GetInstance();
 
-        RecordObject* Acquire(const RecordObjectMeta& meta);
-        void Release(RecordObject* ptr);
+        std::shared_ptr<RecordObject> Acquire(const RecordObjectMeta& meta);
 
         [[maybe_unused]] [[nodiscard]] std::size_t GetPoolSize() const;
         [[maybe_unused]] [[nodiscard]] std::size_t GetFreeObjectCount() const;

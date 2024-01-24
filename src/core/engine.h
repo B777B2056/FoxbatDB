@@ -102,11 +102,11 @@ namespace foxbatdb {
 
     class MaxMemoryStrategy;
 
-    class StorageEngine {
+    class MemoryIndex {
     private:
         std::uint8_t mDBIdx_;
         MaxMemoryStrategy* mMaxMemoryStrategy_;
-        tsl::htrie_map<char, RecordObject*> mHATTrieTree_;
+        tsl::htrie_map<char, std::shared_ptr<RecordObject>> mHATTrieTree_;
 
     public:
         using ForeachCallback = std::function<void(const std::string&, const RecordObject&)>;
@@ -118,26 +118,26 @@ namespace foxbatdb {
         };
 
     public:
-        StorageEngine(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy);
-        StorageEngine(const StorageEngine&) = delete;
-        StorageEngine& operator=(const StorageEngine&) = delete;
-        StorageEngine(StorageEngine&& rhs) noexcept;
-        StorageEngine& operator=(StorageEngine&& rhs) noexcept;
-        ~StorageEngine() = default;
+        MemoryIndex(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy);
+        MemoryIndex(const MemoryIndex&) = delete;
+        MemoryIndex& operator=(const MemoryIndex&) = delete;
+        MemoryIndex(MemoryIndex&& rhs) noexcept;
+        MemoryIndex& operator=(MemoryIndex&& rhs) noexcept;
+        ~MemoryIndex() = default;
 
         void ReleaseMemory();
         [[nodiscard]] bool HaveMemoryAvailable() const;
 
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0) const;
 
-        RecordObject* Put(std::error_code& ec, const std::string& key, const std::string& val);
+        std::weak_ptr<RecordObject> Put(std::error_code& ec, const std::string& key, const std::string& val);
         std::error_code InnerPut(const InnerPutOption& opt,
                                  const std::string& key, const std::string& val);
 
         [[nodiscard]] bool Contains(const std::string& key) const;
 
         std::string Get(std::error_code& ec, const std::string& key);
-        RecordObject* Get(const std::string& key);
+        std::weak_ptr<RecordObject> Get(const std::string& key);
 
         std::error_code Del(const std::string& key);
         [[nodiscard]] std::vector<std::string> PrefixSearch(const std::string& prefix) const;
