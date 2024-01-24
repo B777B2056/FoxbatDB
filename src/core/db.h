@@ -40,6 +40,8 @@ namespace foxbatdb {
                                     std::weak_ptr<CMDSession> weak);
         std::int32_t PublishWithChannel(const std::string& channel,
                                         const std::string& msg);
+
+        void Merge(DataLogFileWrapper* targetFile);
     };
 
     class Database {
@@ -82,6 +84,6 @@ namespace foxbatdb {
 
         std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
 
-        void Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile);
+        void Merge(DataLogFileWrapper* targetFile);
     };
 }// namespace foxbatdb

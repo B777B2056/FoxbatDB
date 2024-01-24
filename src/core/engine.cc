@@ -170,7 +170,8 @@ namespace foxbatdb {
     }
 
     std::string RecordObject::GetValue() const {
-        if (FileRecord record; ConvertToFileRecord(record)) {
+        FileRecord record;
+        if (FileRecord::LoadFromDisk(record, meta.logFilePtr->file, meta.pos)) {
             return record.data.value;
         } else {
             return {};
@@ -194,18 +195,6 @@ namespace foxbatdb {
 
     DataLogFileWrapper* RecordObject::GetDataLogFileHandler() const {
         return meta.logFilePtr;
-    }
-
-    bool RecordObject::ConvertToFileRecord(FileRecord& record) const {
-        return FileRecord::LoadFromDisk(record, meta.logFilePtr->file, meta.pos);
-    }
-
-    bool RecordObject::IsInTargetDataLogFile(DataLogFileWrapper* targetFilePtr) const {
-        auto logFile = meta.logFilePtr;
-        if (!targetFilePtr || !logFile) {
-            return false;
-        }
-        return &targetFilePtr->file == &logFile->file;
     }
 
     std::fstream::pos_type RecordObject::GetFileOffset() const {
@@ -277,12 +266,12 @@ namespace foxbatdb {
         return valObj;
     }
 
-    std::error_code MemoryIndex::InnerPut(const MemoryIndex::InnerPutOption& opt,
-                                          const std::string& key, const std::string& val) {
-        RecordObjectMeta meta{.dbIdx = mDBIdx_, .logFilePtr = opt.logFilePtr};
-        if (opt.pos != -1) meta.pos = opt.pos;
-        if (opt.microSecondTimestamp != 0)
-            meta.createdTime = utils::MicrosecondTimestampConvertToTimePoint(opt.microSecondTimestamp);
+    std::error_code MemoryIndex::PutHistoryData(const std::string& key, const HistoryDataInfo& info) {
+        RecordObjectMeta meta{
+                .dbIdx = mDBIdx_,
+                .logFilePtr = info.logFilePtr,
+                .pos = info.pos,
+                .createdTime = utils::MicrosecondTimestampConvertToTimePoint(info.microSecondTimestamp)};
 
         auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
         if (!valObj) [[unlikely]] {
@@ -290,13 +279,12 @@ namespace foxbatdb {
             return error::RuntimeErrorCode::kMemoryOut;
         }
 
-        valObj->UpdateValue(key, val);
         mHATTrieTree_[key] = valObj;
         return error::RuntimeErrorCode::kSuccess;
     }
 
     bool MemoryIndex::Contains(const std::string& key) const {
-        return mHATTrieTree_.count_ks(key.data(), key.length()) > 0;
+        return mHATTrieTree_.count(key) > 0;
     }
 
     std::string MemoryIndex::Get(std::error_code& ec, const std::string& key) {
@@ -324,13 +312,13 @@ namespace foxbatdb {
     }
 
     std::error_code MemoryIndex::Del(const std::string& key) {
-        if (!mHATTrieTree_.count_ks(key.data(), key.length())) {
+        if (!mHATTrieTree_.count(key)) {
             return error::RuntimeErrorCode::kKeyNotFound;
         }
 
-        auto valObj = mHATTrieTree_.at_ks(key.data(), key.length());
+        auto valObj = mHATTrieTree_.at(key);
         valObj->MarkAsDeleted(key);
-        mHATTrieTree_.erase_ks(key.data(), key.length());
+        mHATTrieTree_.erase(key);
         return error::RuntimeErrorCode::kSuccess;
     }
 
@@ -345,29 +333,30 @@ namespace foxbatdb {
         return ret;
     }
 
-    void MemoryIndex::Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile) {
+    void MemoryIndex::Merge(DataLogFileWrapper* targetFile) {
+        auto& dataLogFileManager = DataLogFileManager::GetInstance();
         std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
-            if (it.value()->IsExpired()) {
-                expiredKeyList.emplace_back(it.key());
+            const auto& key = it.key();
+            const auto& valObj = it.value();
+
+            if (valObj->IsExpired()) {
+                expiredKeyList.emplace_back(key);
                 continue;
             }
 
-            const auto& key = it.key();
-            const auto& valObj = it.value();
             // 不合并当前正可用的db文件
-            if (valObj->IsInTargetDataLogFile(srcFile))
-                return;
+            if (dataLogFileManager.IsRecordInCurrentAvailableLogFile(*valObj))
+                continue;
             // 将活跃的key和记录写入merge文件内后，再更新内存索引
             if (auto val = valObj->GetValue(); !val.empty()) {
-                auto ec = this->InnerPut(MemoryIndex::InnerPutOption{.logFilePtr = targetFile}, key, val);
-                if (ec) {
-                    ServerLog::GetInstance().Error("merge file insert key [] failed: []", key, ec.message());
-                }
+                RecordObjectMeta meta{.dbIdx = mDBIdx_, .logFilePtr = targetFile};
+                valObj->SetMeta(meta);
+                valObj->UpdateValue(key, val);
             }
         }
 
         for (auto&& key: expiredKeyList)
-            mHATTrieTree_.erase_ks(key.data(), key.length());
+            mHATTrieTree_.erase(key);
     }
 }// namespace foxbatdb

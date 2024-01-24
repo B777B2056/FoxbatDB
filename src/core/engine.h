@@ -77,7 +77,6 @@ namespace foxbatdb {
     class L1_CACHE_LINE_ALIGNAS RecordObject {
     private:
         RecordObjectMeta meta;
-        bool ConvertToFileRecord(FileRecord& record) const;
 
     public:
         RecordObject();
@@ -89,7 +88,6 @@ namespace foxbatdb {
         void MarkAsDeleted(const std::string& k);
 
         [[nodiscard]] DataLogFileWrapper* GetDataLogFileHandler() const;
-        [[nodiscard]] bool IsInTargetDataLogFile(DataLogFileWrapper* targetFilePtr) const;
         [[nodiscard]] std::fstream::pos_type GetFileOffset() const;
 
         void SetExpiration(std::chrono::seconds sec);
@@ -106,14 +104,14 @@ namespace foxbatdb {
         tsl::htrie_map<char, std::shared_ptr<RecordObject>> mHATTrieTree_;
 
     public:
-        struct InnerPutOption {
+        struct HistoryDataInfo {
             DataLogFileWrapper* logFilePtr = nullptr;
             std::streampos pos = -1;
             std::uint64_t microSecondTimestamp = 0;
         };
 
     public:
-        MemoryIndex(std::uint8_t dbIdx);
+        explicit MemoryIndex(std::uint8_t dbIdx);
         MemoryIndex(const MemoryIndex&) = delete;
         MemoryIndex& operator=(const MemoryIndex&) = delete;
         MemoryIndex(MemoryIndex&& rhs) noexcept;
@@ -123,8 +121,7 @@ namespace foxbatdb {
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0) const;
 
         std::weak_ptr<RecordObject> Put(std::error_code& ec, const std::string& key, const std::string& val);
-        std::error_code InnerPut(const InnerPutOption& opt,
-                                 const std::string& key, const std::string& val);
+        std::error_code PutHistoryData(const std::string& key, const HistoryDataInfo& info);
 
         [[nodiscard]] bool Contains(const std::string& key) const;
 
@@ -134,6 +131,6 @@ namespace foxbatdb {
         std::error_code Del(const std::string& key);
         std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
 
-        void Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile);
+        void Merge(DataLogFileWrapper* targetFile);
     };
 }// namespace foxbatdb

@@ -62,11 +62,16 @@ namespace foxbatdb {
     void DataLogFileManager::Init() {}
 
     DataLogFileWrapper* DataLogFileManager::GetAvailableLogFile() {
+        std::unique_lock lock{mt};
         if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
             if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
                 PoolExpand();
         }
         return mAvailableNode_->get();
+    }
+
+    bool DataLogFileManager::IsRecordInCurrentAvailableLogFile(const RecordObject& record) const {
+        return mAvailableNode_->get() == record.GetDataLogFileHandler();
     }
 
     void DataLogFileManager::PoolExpand() {
@@ -186,38 +191,30 @@ namespace foxbatdb {
         mAvailableNode_ = std::prev(mLogFilePool_.end());
     }
 
-    void DataLogFileManager::Merge() {
+    static std::unique_ptr<DataLogFileWrapper> CreateMergeLogFile() {
         // 创建merge文件
         auto mergeFileName = BuildLogFileName("merge");
         std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
                                                       std::ios::binary | std::ios::app};
         if (!mergeFile.is_open()) {
             ServerLog::GetInstance().Error("merge data log file open failed: {}", ::strerror(errno));
-            return;
+            return nullptr;
         }
 
-        // 记录当前活跃的文件索引
-        auto currentAvailableNode = mAvailableNode_;
+        // 新建文件结构
+        return std::make_unique<DataLogFileWrapper>(mergeFileName, std::move(mergeFile));
+    }
+
+    void DataLogFileManager::ModifyDataFilesForMerge(std::unique_ptr<DataLogFileWrapper>&& mergeLogFile) {
+        std::unique_lock lock{mt};
         // 向文件池插入merge文件
-        auto savedMergeFileNode = mLogFilePool_.insert(
-                currentAvailableNode,
-                std::make_unique<DataLogFileWrapper>(mergeFileName, std::move(mergeFile)));
-
-        // 合并db文件
-        auto& dbm = DatabaseManager::GetInstance();
-        for (std::size_t i = 0; i < dbm.GetDBListSize(); ++i) {
-            // 遍历DB中所有活跃的key和对应的内存记录
-            dbm.GetDBByIndex(i)->Merge(currentAvailableNode->get(), savedMergeFileNode->get());
-        }
+        auto mergeFileIter = mLogFilePool_.insert(mAvailableNode_, std::move(mergeLogFile));
 
         // 删除原先的只读文件
-        for (auto it = mLogFilePool_.begin(); it != savedMergeFileNode; ++it) {
-            (*it)->file.close();
+        for (auto it = mLogFilePool_.begin(); it != mergeFileIter;) {
             std::filesystem::remove((*it)->name);
+            it = mLogFilePool_.erase(it);
         }
-
-        // 缩容file pool，只包含merge文件和当前活跃的db文件
-        mLogFilePool_.erase(mLogFilePool_.begin(), savedMergeFileNode);
 
         // 重命名merge文件
         for (auto it = mLogFilePool_.begin(); it != mLogFilePool_.end(); ++it) {
@@ -228,5 +225,12 @@ namespace foxbatdb {
 
         // 设置可用文件位置
         mAvailableNode_ = std::prev(mLogFilePool_.end());
+    }
+
+    void DataLogFileManager::Merge() {
+        if (auto mergeLogFile = CreateMergeLogFile(); mergeLogFile) {// 创建merge文件
+            DatabaseManager::GetInstance().Merge(mergeLogFile.get());// 合并db文件
+            this->ModifyDataFilesForMerge(std::move(mergeLogFile));  // 修改磁盘文件组织
+        }
     }
 }// namespace foxbatdb

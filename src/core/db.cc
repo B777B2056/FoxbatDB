@@ -98,6 +98,13 @@ namespace foxbatdb {
         return mPubSubChannel_.Publish(channel, msg);
     }
 
+    void DatabaseManager::Merge(DataLogFileWrapper* targetFile) {
+        // 遍历DB中所有活跃的key和对应的内存记录
+        for (auto& db: mDBList_) {
+            db.Merge(targetFile);
+        }
+    }
+
     Database::Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
         : mIndex_{dbIdx}, mMaxMemoryStrategy_{maxMemoryStrategy} { assert(nullptr != mMaxMemoryStrategy_); }
 
@@ -125,11 +132,11 @@ namespace foxbatdb {
 
     void Database::LoadHistoryData(DataLogFileWrapper* file, std::streampos pos,
                                    const FileRecord& record) {
-        MemoryIndex::InnerPutOption opt{
+        MemoryIndex::HistoryDataInfo opt{
                 .logFilePtr = file,
                 .pos = pos,
                 .microSecondTimestamp = record.header.timestamp};
-        auto ec = mIndex_.InnerPut(opt, record.data.key, "");
+        auto ec = mIndex_.PutHistoryData(record.data.key, opt);
         if (ec) {
             ServerLog::GetInstance().Warning("load history data failed: []", ec.message());
         }
@@ -258,7 +265,7 @@ namespace foxbatdb {
         return list;
     }
 
-    void Database::Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile) {
-        mIndex_.Merge(srcFile, targetFile);
+    void Database::Merge(DataLogFileWrapper* targetFile) {
+        mIndex_.Merge(targetFile);
     }
 }// namespace foxbatdb
