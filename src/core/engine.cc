@@ -232,32 +232,17 @@ namespace foxbatdb {
         return std::chrono::steady_clock::now() >= exTime;
     }
 
-    MemoryIndex::MemoryIndex(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
-        : mDBIdx_{dbIdx}, mMaxMemoryStrategy_{maxMemoryStrategy} {
-        assert(nullptr != mMaxMemoryStrategy_);
-    }
+    MemoryIndex::MemoryIndex(std::uint8_t dbIdx) : mDBIdx_{dbIdx} {}
 
     MemoryIndex::MemoryIndex(MemoryIndex&& rhs) noexcept
-        : mDBIdx_{rhs.mDBIdx_}, mMaxMemoryStrategy_{rhs.mMaxMemoryStrategy_}, mHATTrieTree_{std::move(rhs.mHATTrieTree_)} {
-        rhs.mMaxMemoryStrategy_ = nullptr;
-    }
+        : mDBIdx_{rhs.mDBIdx_}, mHATTrieTree_{std::move(rhs.mHATTrieTree_)} {}
 
     MemoryIndex& MemoryIndex::operator=(MemoryIndex&& rhs) noexcept {
         if (this != &rhs) {
             mDBIdx_ = rhs.mDBIdx_;
-            mMaxMemoryStrategy_ = rhs.mMaxMemoryStrategy_;
             mHATTrieTree_ = std::move(rhs.mHATTrieTree_);
-            rhs.mMaxMemoryStrategy_ = nullptr;
         }
         return *this;
-    }
-
-    void MemoryIndex::ReleaseMemory() {
-        mMaxMemoryStrategy_->ReleaseKey(this);
-    }
-
-    bool MemoryIndex::HaveMemoryAvailable() const {
-        return mMaxMemoryStrategy_->HaveMemoryAvailable();
     }
 
     void MemoryIndex::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) const {
@@ -289,7 +274,6 @@ namespace foxbatdb {
 
         valObj->UpdateValue(key, val);
         mHATTrieTree_[key] = valObj;
-        mMaxMemoryStrategy_->UpdateStateForWriteOp(key);
         return valObj;
     }
 
@@ -336,11 +320,6 @@ namespace foxbatdb {
             Del(key);
             return {};
         }
-
-        if (valObj->GetValue().empty()) {
-            return {};
-        }
-        mMaxMemoryStrategy_->UpdateStateForReadOp(key);
         return valObj;
     }
 
@@ -355,26 +334,37 @@ namespace foxbatdb {
         return error::RuntimeErrorCode::kSuccess;
     }
 
-    std::vector<std::string> MemoryIndex::PrefixSearch(const std::string& prefix) const {
-        std::vector<std::string> ret;
+    std::vector<std::pair<std::string, std::string>> MemoryIndex::PrefixSearch(const std::string& prefix) const {
+        std::vector<std::pair<std::string, std::string>> ret;
         auto prefixRange = mHATTrieTree_.equal_prefix_range({prefix.data(), prefix.length()});
         for (auto it = prefixRange.first; it != prefixRange.second; ++it) {
             if (auto val = it.value()->GetValue(); !val.empty()) {
-                mMaxMemoryStrategy_->UpdateStateForReadOp(it.key());
-                ret.emplace_back(val);
+                ret.emplace_back(it.key(), val);
             }
         }
         return ret;
     }
 
-    void MemoryIndex::Foreach(ForeachCallback&& callback) {
+    void MemoryIndex::Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile) {
         std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
             if (it.value()->IsExpired()) {
                 expiredKeyList.emplace_back(it.key());
                 continue;
             }
-            callback(it.key(), *(it.value()));
+
+            const auto& key = it.key();
+            const auto& valObj = it.value();
+            // 不合并当前正可用的db文件
+            if (valObj->IsInTargetDataLogFile(srcFile))
+                return;
+            // 将活跃的key和记录写入merge文件内后，再更新内存索引
+            if (auto val = valObj->GetValue(); !val.empty()) {
+                auto ec = this->InnerPut(MemoryIndex::InnerPutOption{.logFilePtr = targetFile}, key, val);
+                if (ec) {
+                    ServerLog::GetInstance().Error("merge file insert key [] failed: []", key, ec.message());
+                }
+            }
         }
 
         for (auto&& key: expiredKeyList)

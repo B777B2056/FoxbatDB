@@ -37,12 +37,12 @@ namespace foxbatdb {
         struct ResponseBuilder {
             std::string operator()(const T& data) {
                 std::string resp;
-                if constexpr (std::is_same_v<int, T>) {
-                    BuildIntegerResp(resp, data);
-                } else if constexpr (std::is_same_v<double, T>) {
-                    BuildDoubleResp(resp, data);
-                } else if constexpr (std::is_same_v<bool, T>) {
+                if constexpr (std::is_same_v<bool, T>) {
                     BuildBooleanResp(resp, data);
+                } else if constexpr (std::is_same_v<float, T> || std::is_same_v<double, T>) {
+                    BuildDoubleResp(resp, data);
+                } else if constexpr (std::is_integral_v<T>) {
+                    BuildIntegerResp(resp, data);
                 } else if constexpr (std::is_bounded_array_v<T>) {
                     BuildSimpleStringResp(resp, data);
                 } else if constexpr (std::is_same_v<std::string, T>) {
@@ -96,7 +96,7 @@ namespace foxbatdb {
             detail::BuildPushesResp(resp, list);
             return resp;
         }
-        
+
         const static std::string OK_RESPONSE = BuildResponse("OK");
         const static std::string QUEUED_RESPONSE = BuildResponse("QUEUED");
     }// namespace utils

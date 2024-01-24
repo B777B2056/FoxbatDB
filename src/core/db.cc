@@ -80,54 +80,33 @@ namespace foxbatdb {
         }
     }
 
-    void DatabaseManager::SetNonWrite() {
-        mIsNonWrite_ = true;
-    }
+    void DatabaseManager::SetNonWrite() { mIsNonWrite_ = true; }
+    void DatabaseManager::CancelNonWrite() { mIsNonWrite_ = false; }
+    bool DatabaseManager::IsInReadonlyMode() const { return mIsNonWrite_; }
+    std::size_t DatabaseManager::GetDBListSize() const { return mDBList_.size(); }
+    Database* DatabaseManager::GetDBByIndex(std::size_t idx) { return &mDBList_[idx]; }
 
-    void DatabaseManager::CancelNonWrite() {
-        mIsNonWrite_ = false;
-    }
-
-    bool DatabaseManager::IsInReadonlyMode() const {
-        return mIsNonWrite_;
-    }
-
-    std::size_t DatabaseManager::GetDBListSize() const {
-        return mDBList_.size();
-    }
-
-    Database* DatabaseManager::GetDBByIndex(std::size_t idx) {
-        return &mDBList_[idx];
-    }
-
-    void DatabaseManager::SubscribeWithChannel(const std::string& channel,
-                                               std::weak_ptr<CMDSession> weak) {
+    void DatabaseManager::SubscribeWithChannel(const std::string& channel, std::weak_ptr<CMDSession> weak) {
         mPubSubChannel_.Subscribe(channel, weak);
     }
 
-    void DatabaseManager::UnSubscribeWithChannel(const std::string& channel,
-                                                 std::weak_ptr<CMDSession> weak) {
+    void DatabaseManager::UnSubscribeWithChannel(const std::string& channel, std::weak_ptr<CMDSession> weak) {
         mPubSubChannel_.UnSubscribe(channel, weak);
     }
 
-    std::int32_t DatabaseManager::PublishWithChannel(const std::string& channel,
-                                                     const std::string& msg) {
+    std::int32_t DatabaseManager::PublishWithChannel(const std::string& channel, const std::string& msg) {
         return mPubSubChannel_.Publish(channel, msg);
     }
 
     Database::Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
-        : mIndex_{dbIdx, maxMemoryStrategy} {}
+        : mIndex_{dbIdx}, mMaxMemoryStrategy_{maxMemoryStrategy} { assert(nullptr != mMaxMemoryStrategy_); }
 
     void Database::ReleaseMemory() {
-        mIndex_.ReleaseMemory();
+        mMaxMemoryStrategy_->ReleaseKey(&mIndex_);
     }
 
     bool Database::HaveMemoryAvailable() const {
-        return mIndex_.HaveMemoryAvailable();
-    }
-
-    void Database::Foreach(MemoryIndex::ForeachCallback&& callback) {
-        mIndex_.Foreach(std::move(callback));
+        return mMaxMemoryStrategy_->HaveMemoryAvailable();
     }
 
     void Database::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) {
@@ -144,8 +123,8 @@ namespace foxbatdb {
         }
     }
 
-    void Database::StrSetForHistoryData(DataLogFileWrapper* file, std::streampos pos,
-                                        const FileRecord& record) {
+    void Database::LoadHistoryData(DataLogFileWrapper* file, std::streampos pos,
+                                   const FileRecord& record) {
         MemoryIndex::InnerPutOption opt{
                 .logFilePtr = file,
                 .pos = pos,
@@ -175,16 +154,10 @@ namespace foxbatdb {
                 data = payload;
             }
         }
+
+        mMaxMemoryStrategy_->UpdateStateForWriteOp(key);
         NotifyWatchedClientSession(key);
         return std::make_tuple(error::ProtocolErrorCode::kSuccess, data);
-    }
-
-    void Database::StrSetForMerge(DataLogFileWrapper* mergeFile,
-                                  const std::string& key, const std::string& val) {
-        auto ec = mIndex_.InnerPut(MemoryIndex::InnerPutOption{.logFilePtr = mergeFile}, key, val);
-        if (ec) {
-            ServerLog::GetInstance().Error("merge file insert key [] failed: []", key, ec.message());
-        }
     }
 
     std::tuple<std::error_code, std::optional<std::string>>
@@ -247,6 +220,8 @@ namespace foxbatdb {
         if (ec) {
             return {};
         }
+
+        mMaxMemoryStrategy_->UpdateStateForReadOp(key);
         return val;
     }
 
@@ -276,7 +251,14 @@ namespace foxbatdb {
         mWatchedMap_.erase(key);
     }
 
-    std::vector<std::string> Database::PrefixSearch(const std::string& prefix) const {
-        return mIndex_.PrefixSearch(prefix);
+    std::vector<std::pair<std::string, std::string>> Database::PrefixSearch(const std::string& prefix) const {
+        auto list = mIndex_.PrefixSearch(prefix);
+        for (const auto& [key, _]: list)
+            mMaxMemoryStrategy_->UpdateStateForReadOp(key);
+        return list;
+    }
+
+    void Database::Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile) {
+        mIndex_.Merge(srcFile, targetFile);
     }
 }// namespace foxbatdb

@@ -116,7 +116,7 @@ namespace foxbatdb {
         for (const auto& [pos, record]: txRecords) {
             if (record.header.valSize > 0) {
                 dbm.GetDBByIndex(record.header.dbIdx)
-                        ->StrSetForHistoryData(fileWrapper, pos, record);
+                        ->LoadHistoryData(fileWrapper, pos, record);
             }
         }
 
@@ -166,9 +166,9 @@ namespace foxbatdb {
 
                 if (TxRuntimeState::kData == record.header.txRuntimeState) {
                     // 恢复普通数据记录
-                    if (record.header.valSize > 0) {
+                    if (record.header.valSize && !record.data.value.empty()) {
                         dbm.GetDBByIndex(record.header.dbIdx)
-                                ->StrSetForHistoryData(fileWrapper.get(), pos, record);
+                                ->LoadHistoryData(fileWrapper.get(), pos, record);
                     }
                 } else {
                     // 恢复事务记录
@@ -206,17 +206,8 @@ namespace foxbatdb {
         // 合并db文件
         auto& dbm = DatabaseManager::GetInstance();
         for (std::size_t i = 0; i < dbm.GetDBListSize(); ++i) {
-            auto* db = dbm.GetDBByIndex(i);
             // 遍历DB中所有活跃的key和对应的内存记录
-            db->Foreach(
-                    [db, currentAvailableNode, savedMergeFileNode](const std::string& key, const RecordObject& valObj) -> void {
-                        // 不合并当前正可用的db文件
-                        if (valObj.IsInTargetDataLogFile(currentAvailableNode->get()))
-                            return;
-                        // 将活跃的key和记录写入merge文件内后，再更新内存索引
-                        if (auto val = valObj.GetValue(); !val.empty())
-                            db->StrSetForMerge(savedMergeFileNode->get(), key, val);
-                    });
+            dbm.GetDBByIndex(i)->Merge(currentAvailableNode->get(), savedMergeFileNode->get());
         }
 
         // 删除原先的只读文件

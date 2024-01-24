@@ -3,6 +3,7 @@
 #include <climits>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace foxbatdb {
     enum class CmdOptionType : std::uint8_t {

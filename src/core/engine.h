@@ -100,17 +100,12 @@ namespace foxbatdb {
 
 #undef LI_CACHE_LINE_ALIGNAS
 
-    class MaxMemoryStrategy;
-
     class MemoryIndex {
     private:
         std::uint8_t mDBIdx_;
-        MaxMemoryStrategy* mMaxMemoryStrategy_;
         tsl::htrie_map<char, std::shared_ptr<RecordObject>> mHATTrieTree_;
 
     public:
-        using ForeachCallback = std::function<void(const std::string&, const RecordObject&)>;
-
         struct InnerPutOption {
             DataLogFileWrapper* logFilePtr = nullptr;
             std::streampos pos = -1;
@@ -118,15 +113,12 @@ namespace foxbatdb {
         };
 
     public:
-        MemoryIndex(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy);
+        MemoryIndex(std::uint8_t dbIdx);
         MemoryIndex(const MemoryIndex&) = delete;
         MemoryIndex& operator=(const MemoryIndex&) = delete;
         MemoryIndex(MemoryIndex&& rhs) noexcept;
         MemoryIndex& operator=(MemoryIndex&& rhs) noexcept;
         ~MemoryIndex() = default;
-
-        void ReleaseMemory();
-        [[nodiscard]] bool HaveMemoryAvailable() const;
 
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0) const;
 
@@ -140,7 +132,8 @@ namespace foxbatdb {
         std::weak_ptr<RecordObject> Get(const std::string& key);
 
         std::error_code Del(const std::string& key);
-        [[nodiscard]] std::vector<std::string> PrefixSearch(const std::string& prefix) const;
-        void Foreach(ForeachCallback&& callback);
+        std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
+
+        void Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile);
     };
 }// namespace foxbatdb

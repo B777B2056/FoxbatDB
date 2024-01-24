@@ -113,7 +113,7 @@ namespace foxbatdb {
                       [this](const TxUndoInfo& info) -> void {
                           FileRecord data;
                           if (FileRecord::LoadFromDisk(data, info.dbFile->file, info.readPos))
-                              mDB_->StrSetForHistoryData(info.dbFile, info.readPos, data);
+                              mDB_->LoadHistoryData(info.dbFile, info.readPos, data);
                       });
         CancelTxMode();
     }

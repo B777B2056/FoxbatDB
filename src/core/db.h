@@ -45,6 +45,7 @@ namespace foxbatdb {
     class Database {
     private:
         MemoryIndex mIndex_;
+        MaxMemoryStrategy* mMaxMemoryStrategy_;
         std::unordered_map<std::string, std::vector<std::weak_ptr<CMDSession>>> mWatchedMap_;
 
         std::tuple<std::error_code, std::optional<std::string>> StrSetWithOption(
@@ -63,16 +64,15 @@ namespace foxbatdb {
         void ReleaseMemory();
         bool HaveMemoryAvailable() const;
 
-        void Foreach(MemoryIndex::ForeachCallback&& callback);
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
 
-        void StrSetForHistoryData(DataLogFileWrapper* file, std::streampos pos,
-                                  const FileRecord& record);
+        void LoadHistoryData(DataLogFileWrapper* file, std::streampos pos,
+                             const FileRecord& record);
+
         std::tuple<std::error_code, std::optional<std::string>> StrSet(
                 const std::string& key, const std::string& val,
                 const std::vector<CommandOption>& opts = {});
-        void StrSetForMerge(DataLogFileWrapper* mergeFile,
-                            const std::string& key, const std::string& val);
+
         std::optional<std::string> StrGet(const std::string& key);
         std::error_code Del(const std::string& key);
         std::weak_ptr<RecordObject> Get(const std::string& key);
@@ -80,6 +80,8 @@ namespace foxbatdb {
         void AddWatchKeyWithClient(const std::string& key, std::weak_ptr<CMDSession> clt);
         void DelWatchKeyAndClient(const std::string& key);
 
-        std::vector<std::string> PrefixSearch(const std::string& prefix) const;
+        std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
+
+        void Merge(DataLogFileWrapper* srcFile, DataLogFileWrapper* targetFile);
     };
 }// namespace foxbatdb

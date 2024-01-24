@@ -1,5 +1,4 @@
 #pragma once
-#include "utils/resp.h"
 #include <memory>
 #include <string>
 
@@ -11,17 +10,6 @@ namespace foxbatdb {
         bool hasError;
         std::string data;
     };
-
-    namespace detail {
-        ProcResult MakeProcResult(std::error_code err);
-        ProcResult MakePubSubProcResult(const std::vector<std::string>& data);
-
-        template<typename T>
-            requires(!std::is_same_v<T, std::error_code>)
-        ProcResult MakeProcResult(const T& data) {
-            return ProcResult{.hasError = false, .data = utils::BuildResponse<T>(data)};
-        }
-    }// namespace detail
 
     ProcResult CommandDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult InfoDB(std::weak_ptr<CMDSession> weak, const Command& cmd);

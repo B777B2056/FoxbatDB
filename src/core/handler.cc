@@ -4,20 +4,30 @@
 #include "errors/runtime.h"
 #include "frontend/cmdmap.h"
 #include "frontend/server.h"
+#include "utils/resp.h"
 #include "utils/utils.h"
 
 namespace foxbatdb {
-    ProcResult detail::MakeProcResult(std::error_code err) {
-        return ProcResult{.hasError = true, .data = utils::BuildErrorResponse(err)};
-    }
+    namespace {
+        ProcResult MakeProcResult(std::error_code err) {
+            return ProcResult{.hasError = true, .data = utils::BuildErrorResponse(err)};
+        }
 
-    ProcResult detail::MakePubSubProcResult(const std::vector<std::string>& data) {
-        return ProcResult{.hasError = false, .data = utils::BuildPubSubResponse(data)};
-    }
+        template<typename T>
+            requires(!std::is_same_v<T, std::error_code>)
+        ProcResult MakeProcResult(const T& data) {
+            return ProcResult{.hasError = false, .data = utils::BuildResponse<T>(data)};
+        }
 
-    static ProcResult OKResp() {
-        return ProcResult{.hasError = false, .data = utils::OK_RESPONSE};
-    }
+        ProcResult MakePubSubProcResult(const std::vector<std::string>& data) {
+            return ProcResult{.hasError = false, .data = utils::BuildPubSubResponse(data)};
+        }
+
+        ProcResult OKResp() {
+            return ProcResult{.hasError = false, .data = utils::OK_RESPONSE};
+        }
+
+    }// namespace
 
     ProcResult CommandDB(std::weak_ptr<CMDSession>, const Command&) {
         return OKResp();
@@ -34,23 +44,23 @@ namespace foxbatdb {
     ProcResult SwitchDB(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto idx = utils::ToInteger<std::size_t>(cmd.argv.back());
         if (!idx.has_value()) {
-            return detail::MakeProcResult(error::ProtocolErrorCode::kSyntax);
+            return MakeProcResult(error::ProtocolErrorCode::kSyntax);
         }
 
         if (*idx >= DatabaseManager::GetInstance().GetDBListSize()) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kDBIdxOutOfRange);
+            return MakeProcResult(error::RuntimeErrorCode::kDBIdxOutOfRange);
         }
         if (auto clt = weak.lock(); clt) {
             clt->SwitchToTargetDB(*idx);
             return OKResp();
         } else {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
     }
 
     ProcResult Load(std::weak_ptr<CMDSession>, const Command& cmd) {
         if (DatabaseManager::GetInstance().IsInReadonlyMode()) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
+            return MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
         }
 
         int cnt = 0;
@@ -61,12 +71,12 @@ namespace foxbatdb {
             }
         }
 
-        return detail::MakeProcResult(cnt);
+        return MakeProcResult(cnt);
     }
 
     ProcResult StrSet(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         if (DatabaseManager::GetInstance().IsInReadonlyMode()) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
+            return MakeProcResult(error::RuntimeErrorCode::kMemoryOut);
         }
 
         auto& key = cmd.argv[0];
@@ -74,15 +84,15 @@ namespace foxbatdb {
 
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto* db = clt->CurrentDB();
         auto [err, data] = db->StrSet(key, val, cmd.options);
         if (err) {
-            return detail::MakeProcResult(err);
+            return MakeProcResult(err);
         } else if (data.has_value()) {
-            return detail::MakeProcResult(*data);
+            return MakeProcResult(*data);
         } else {
             return OKResp();
         }
@@ -91,23 +101,23 @@ namespace foxbatdb {
     ProcResult StrGet(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto& key = cmd.argv[0];
         auto* db = clt->CurrentDB();
         auto val = db->StrGet(key);
         if (!val.has_value() || val->empty()) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kKeyNotFound);
+            return MakeProcResult(error::RuntimeErrorCode::kKeyNotFound);
         }
 
-        return detail::MakeProcResult(*val);
+        return MakeProcResult(*val);
     }
 
     ProcResult Del(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         int cnt = 0;
@@ -116,13 +126,13 @@ namespace foxbatdb {
             if (!db->Del(key))
                 ++cnt;
         }
-        return detail::MakeProcResult(cnt);
+        return MakeProcResult(cnt);
     }
 
     ProcResult Watch(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto* db = clt->CurrentDB();
@@ -133,7 +143,7 @@ namespace foxbatdb {
     ProcResult UnWatch(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         clt->DelWatchKey(cmd.argv[0]);
@@ -143,19 +153,19 @@ namespace foxbatdb {
     ProcResult PublishWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto& dbm = DatabaseManager::GetInstance();
         auto cnt = dbm.PublishWithChannel(cmd.argv[0], cmd.argv[1]);
 
-        return detail::MakeProcResult(cnt);
+        return MakeProcResult(cnt);
     }
 
     ProcResult SubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         std::vector<std::string> result;
@@ -168,13 +178,13 @@ namespace foxbatdb {
             result.emplace_back(std::to_string(i + 1));
         }
 
-        return detail::MakePubSubProcResult(result);
+        return MakePubSubProcResult(result);
     }
 
     ProcResult UnSubscribeWithChannel(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto& dbm = DatabaseManager::GetInstance();
@@ -186,7 +196,7 @@ namespace foxbatdb {
     ProcResult Merge(std::weak_ptr<CMDSession> weak, const Command&) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto& fm = DataLogFileManager::GetInstance();
@@ -197,12 +207,18 @@ namespace foxbatdb {
     ProcResult Prefix(std::weak_ptr<CMDSession> weak, const Command& cmd) {
         auto clt = weak.lock();
         if (!clt) {
-            return detail::MakeProcResult(error::RuntimeErrorCode::kIntervalError);
+            return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
 
         auto* db = clt->CurrentDB();
-        return detail::MakeProcResult(
-                utils::BuildArrayResponseWithFilledItems(
-                        db->PrefixSearch(cmd.argv[0])));
+        auto kvList = db->PrefixSearch(cmd.argv[0]);
+
+        std::vector<std::string> ret{kvList.size() * 2};
+        std::for_each(kvList.begin(), kvList.end(),
+                      [&ret](const std::pair<std::string, std::string>& item) {
+                          ret.emplace_back(item.first);
+                          ret.emplace_back(item.second);
+                      });
+        return MakeProcResult(utils::BuildArrayResponseWithFilledItems(ret));
     }
 }// namespace foxbatdb
