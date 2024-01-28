@@ -98,15 +98,17 @@ namespace foxbatdb {
         return mPubSubChannel_.Publish(channel, msg);
     }
 
-    void DatabaseManager::Merge(DataLogFileWrapper* targetFile) {
+    void DatabaseManager::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
         // 遍历DB中所有活跃的key和对应的内存记录
         for (auto& db: mDBList_) {
-            db.Merge(targetFile);
+            db.Merge(targetFile, writableFile);
         }
     }
 
     Database::Database(std::uint8_t dbIdx, MaxMemoryStrategy* maxMemoryStrategy)
-        : mIndex_{dbIdx}, mMaxMemoryStrategy_{maxMemoryStrategy} { assert(nullptr != mMaxMemoryStrategy_); }
+        : mDBIdx_{dbIdx},
+          mIndex_{dbIdx},
+          mMaxMemoryStrategy_{maxMemoryStrategy} { assert(nullptr != mMaxMemoryStrategy_); }
 
     void Database::ReleaseMemory() {
         mMaxMemoryStrategy_->ReleaseKey(&mIndex_);
@@ -114,6 +116,26 @@ namespace foxbatdb {
 
     bool Database::HaveMemoryAvailable() const {
         return mMaxMemoryStrategy_->HaveMemoryAvailable();
+    }
+
+    std::shared_ptr<RecordObject> Database::GetRecordSnapshot(const std::string& key) {
+        auto srcValObj = this->Get(key);
+        if (srcValObj.expired()) return nullptr;
+
+        auto valObj = RecordObjectPool::GetInstance().Acquire(srcValObj.lock()->GetMeta());
+        if (!valObj) [[unlikely]] {
+            ServerLog::GetInstance().Error("memory allocate failed");
+            return nullptr;
+        }
+
+        return valObj;
+    }
+
+    void Database::RecoverRecordWithSnapshot(const std::string& key, std::shared_ptr<RecordObject> snapshot) {
+        if (!snapshot) return;
+
+        snapshot->DumpToDisk(key, snapshot->GetValue());
+        mIndex_.Put(key, snapshot);
     }
 
     void Database::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) {
@@ -130,7 +152,7 @@ namespace foxbatdb {
         }
     }
 
-    void Database::LoadHistoryData(DataLogFileWrapper* file, std::streampos pos,
+    void Database::LoadHistoryData(DataLogFile* file, std::streampos pos,
                                    const FileRecord& record) {
         MemoryIndex::HistoryDataInfo opt{
                 .logFilePtr = file,
@@ -146,14 +168,23 @@ namespace foxbatdb {
             const std::string& key, const std::string& val,
             const std::vector<CommandOption>& opts) {
         std::error_code ec;
-        auto obj = mIndex_.Put(ec, key, val);
-        if (ec) {
+        if ((key.size() > Flags::GetInstance().keyMaxBytes) ||
+            (val.size() > Flags::GetInstance().valMaxBytes)) {
+            ec = error::RuntimeErrorCode::kKeyValTooLong;
+            return std::make_tuple(ec, std::nullopt);
+        }
+
+        RecordObjectMeta meta{.dbIdx = mDBIdx_};
+        auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
+        if (!valObj) [[unlikely]] {
+            ServerLog::GetInstance().Error("memory allocate failed");
+            ec = error::RuntimeErrorCode::kMemoryOut;
             return std::make_tuple(ec, std::nullopt);
         }
 
         std::optional<std::string> data = std::nullopt;
         for (const auto& opt: opts) {
-            auto [err, payload] = StrSetWithOption(key, *obj.lock(), opt);
+            auto [err, payload] = StrSetWithOption(key, *valObj, opt);
             if (err) {
                 return std::make_tuple(err, std::nullopt);
             }
@@ -161,6 +192,9 @@ namespace foxbatdb {
                 data = payload;
             }
         }
+
+        valObj->DumpToDisk(key, val);
+        mIndex_.Put(key, valObj);
 
         mMaxMemoryStrategy_->UpdateStateForWriteOp(key);
         NotifyWatchedClientSession(key);
@@ -212,12 +246,13 @@ namespace foxbatdb {
                 if (mIndex_.Contains(key)) {
                     data = StrGet(key);
                 } else {
-                    data = {"nil"};
+                    err = error::RuntimeErrorCode::kKeyNotFound;
                 }
                 break;
             default:
                 break;
         }
+
         return std::make_tuple(err, data);
     }
 
@@ -265,7 +300,7 @@ namespace foxbatdb {
         return list;
     }
 
-    void Database::Merge(DataLogFileWrapper* targetFile) {
-        mIndex_.Merge(targetFile);
+    void Database::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
+        mIndex_.Merge(targetFile, writableFile);
     }
 }// namespace foxbatdb

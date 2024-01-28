@@ -11,13 +11,11 @@ namespace foxbatdb {
         std::string data;
     };
 
-    ProcResult CommandDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
-    ProcResult InfoDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
-    ProcResult ServerDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult SwitchDB(std::weak_ptr<CMDSession> weak, const Command& cmd);
-    ProcResult Load(std::weak_ptr<CMDSession> weak, const Command& cmd);
+    ProcResult Hello(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult StrSet(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult StrGet(std::weak_ptr<CMDSession> weak, const Command& cmd);
+    ProcResult Exists(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult Del(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult Watch(std::weak_ptr<CMDSession> weak, const Command& cmd);
     ProcResult UnWatch(std::weak_ptr<CMDSession> weak, const Command& cmd);

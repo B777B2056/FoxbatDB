@@ -27,10 +27,6 @@ namespace foxbatdb {
 
         void WritePublishMsg(const std::string& channel, const std::string& msg);
 
-#ifdef _FOXBATDB_SELF_TEST
-        std::string DoExecOneCmd(const ParseResult& result);
-#endif
-
     private:
         asio::ip::tcp::socket mSocket_;
         asio::streambuf mReadBuffer_;

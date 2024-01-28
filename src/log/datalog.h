@@ -4,9 +4,10 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 namespace foxbatdb {
-    struct DataLogFileWrapper {
+    struct DataLogFile {
         std::string name;
         std::fstream file;
     };
@@ -15,15 +16,18 @@ namespace foxbatdb {
 
     class DataLogFileManager {
     private:
-        mutable std::mutex mt;
-        std::list<std::unique_ptr<DataLogFileWrapper>> mLogFilePool_;
-        std::list<std::unique_ptr<DataLogFileWrapper>>::iterator mAvailableNode_;
+        using FilePtr = std::unique_ptr<DataLogFile>;
+        using FileIter = std::list<FilePtr>::iterator;
+
+    private:
+        std::list<FilePtr> mLogFilePool_;
+        std::list<FilePtr>::iterator mWritableFileIter_;
 
         DataLogFileManager();
         void PoolExpand();
-        static bool LoadHistoryTxFromDisk(DataLogFileWrapper* fileWrapper, std::uint64_t txNum);
+        bool FillDataLogFilePoolByHistoryDataFile();
         void LoadHistoryRecordsFromDisk();
-        void ModifyDataFilesForMerge(std::unique_ptr<DataLogFileWrapper>&& mergeLogFile);
+        void ModifyDataFilesForMerge(FileIter& writableNode, FilePtr&& mergeLogFile);
 
     public:
         DataLogFileManager(const DataLogFileManager&) = delete;
@@ -31,8 +35,7 @@ namespace foxbatdb {
         ~DataLogFileManager() = default;
         static DataLogFileManager& GetInstance();
         void Init();
-        DataLogFileWrapper* GetAvailableLogFile();
-        bool IsRecordInCurrentAvailableLogFile(const RecordObject& record) const;
+        DataLogFile* GetWritableDataFile();
         void Merge();
     };
 }// namespace foxbatdb

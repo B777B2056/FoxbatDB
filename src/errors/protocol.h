@@ -9,7 +9,8 @@ namespace foxbatdb::error {
         kCommandNotFound,
         kSyntax,
         kRequestFormat,
-        kOptionExclusive
+        kOptionExclusive,
+        kNoProto
     };
 
     class ProtocolErrorCategory : public std::error_category {

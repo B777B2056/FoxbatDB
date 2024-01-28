@@ -169,6 +169,10 @@ namespace foxbatdb {
         this->meta = m;
     }
 
+    RecordObjectMeta RecordObject::GetMeta() const {
+        return this->meta;
+    }
+
     std::string RecordObject::GetValue() const {
         FileRecord record;
         if (FileRecord::LoadFromDisk(record, meta.logFilePtr->file, meta.pos)) {
@@ -178,7 +182,7 @@ namespace foxbatdb {
         }
     }
 
-    void RecordObject::UpdateValue(const std::string& k, const std::string& v) {
+    void RecordObject::DumpToDisk(const std::string& k, const std::string& v) {
         if (k.empty() || v.empty()) return;
 
         auto logFile = meta.logFilePtr;
@@ -190,15 +194,11 @@ namespace foxbatdb {
     }
 
     void RecordObject::MarkAsDeleted(const std::string& k) {
-        UpdateValue(k, "");
+        DumpToDisk(k, "");
     }
 
-    DataLogFileWrapper* RecordObject::GetDataLogFileHandler() const {
+    const DataLogFile* RecordObject::GetDataLogFileHandler() const {
         return meta.logFilePtr;
-    }
-
-    std::fstream::pos_type RecordObject::GetFileOffset() const {
-        return meta.pos;
     }
 
     void RecordObject::SetExpiration(std::chrono::seconds sec) {
@@ -240,30 +240,12 @@ namespace foxbatdb {
         else
             assert(0 != txCmdNum);
         auto& logFileManager = DataLogFileManager::GetInstance();
-        auto& targetLogFile = logFileManager.GetAvailableLogFile()->file;
+        auto& targetLogFile = logFileManager.GetWritableDataFile()->file;
         FileRecord::DumpTxFlagToDisk(targetLogFile, mDBIdx_, txFlag, txCmdNum);
     }
 
-    std::weak_ptr<RecordObject> MemoryIndex::Put(std::error_code& ec,
-                                                 const std::string& key, const std::string& val) {
-        if ((key.size() > Flags::GetInstance().keyMaxBytes) ||
-            (key.size() > Flags::GetInstance().valMaxBytes)) {
-            ec = error::RuntimeErrorCode::kKeyValTooLong;
-            return {};
-        }
-
-        ec = error::RuntimeErrorCode::kSuccess;
-        RecordObjectMeta meta{.dbIdx = mDBIdx_};
-        auto valObj = RecordObjectPool::GetInstance().Acquire(meta);
-        if (!valObj) [[unlikely]] {
-            ServerLog::GetInstance().Error("memory allocate failed");
-            ec = error::RuntimeErrorCode::kMemoryOut;
-            return {};
-        }
-
-        valObj->UpdateValue(key, val);
+    void MemoryIndex::Put(const std::string& key, std::shared_ptr<RecordObject> valObj) {
         mHATTrieTree_[key] = valObj;
-        return valObj;
     }
 
     std::error_code MemoryIndex::PutHistoryData(const std::string& key, const HistoryDataInfo& info) {
@@ -305,7 +287,8 @@ namespace foxbatdb {
 
         auto valObj = mHATTrieTree_.at(key);
         if (valObj->IsExpired()) {
-            Del(key);
+            valObj->MarkAsDeleted(key);
+            mHATTrieTree_.erase(key);
             return {};
         }
         return valObj;
@@ -333,8 +316,7 @@ namespace foxbatdb {
         return ret;
     }
 
-    void MemoryIndex::Merge(DataLogFileWrapper* targetFile) {
-        auto& dataLogFileManager = DataLogFileManager::GetInstance();
+    void MemoryIndex::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
         std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
             const auto& key = it.key();
@@ -346,13 +328,13 @@ namespace foxbatdb {
             }
 
             // 不合并当前正可用的db文件
-            if (dataLogFileManager.IsRecordInCurrentAvailableLogFile(*valObj))
+            if (writableFile == valObj->GetDataLogFileHandler())
                 continue;
             // 将活跃的key和记录写入merge文件内后，再更新内存索引
             if (auto val = valObj->GetValue(); !val.empty()) {
                 RecordObjectMeta meta{.dbIdx = mDBIdx_, .logFilePtr = targetFile};
                 valObj->SetMeta(meta);
-                valObj->UpdateValue(key, val);
+                valObj->DumpToDisk(key, val);
             }
         }
 

@@ -76,6 +76,11 @@ namespace foxbatdb {
             }
         }
 
+        void BuildNilResp(std::string& resp) {
+            resp += "$-1";
+            resp += "\r\n";
+        }
+
         void BuildNullResp(std::string& resp) {
             BuildResponseHelper(resp, '_', "");
         }

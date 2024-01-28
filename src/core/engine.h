@@ -68,7 +68,7 @@ namespace foxbatdb {
 
     struct L1_CACHE_LINE_ALIGNAS RecordObjectMeta {
         std::uint8_t dbIdx = 0;
-        DataLogFileWrapper* logFilePtr = DataLogFileManager::GetInstance().GetAvailableLogFile();
+        DataLogFile* logFilePtr = DataLogFileManager::GetInstance().GetWritableDataFile();
         std::streampos pos = -1;
         std::chrono::milliseconds expirationTimeMs = INVALID_EXPIRE_TIME;
         std::chrono::time_point<std::chrono::steady_clock> createdTime = std::chrono::steady_clock::now();
@@ -82,13 +82,14 @@ namespace foxbatdb {
         RecordObject();
 
         void SetMeta(const RecordObjectMeta& m);
-        void UpdateValue(const std::string& k, const std::string& v);
+        RecordObjectMeta GetMeta() const;
+
+        void DumpToDisk(const std::string& k, const std::string& v);
 
         [[nodiscard]] std::string GetValue() const;
         void MarkAsDeleted(const std::string& k);
 
-        [[nodiscard]] DataLogFileWrapper* GetDataLogFileHandler() const;
-        [[nodiscard]] std::fstream::pos_type GetFileOffset() const;
+        [[nodiscard]] const DataLogFile* GetDataLogFileHandler() const;
 
         void SetExpiration(std::chrono::seconds sec);
         void SetExpiration(std::chrono::milliseconds ms);
@@ -105,7 +106,7 @@ namespace foxbatdb {
 
     public:
         struct HistoryDataInfo {
-            DataLogFileWrapper* logFilePtr = nullptr;
+            DataLogFile* logFilePtr = nullptr;
             std::streampos pos = -1;
             std::uint64_t microSecondTimestamp = 0;
         };
@@ -120,7 +121,7 @@ namespace foxbatdb {
 
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0) const;
 
-        std::weak_ptr<RecordObject> Put(std::error_code& ec, const std::string& key, const std::string& val);
+        void Put(const std::string& key, std::shared_ptr<RecordObject> valObj);
         std::error_code PutHistoryData(const std::string& key, const HistoryDataInfo& info);
 
         [[nodiscard]] bool Contains(const std::string& key) const;
@@ -131,6 +132,6 @@ namespace foxbatdb {
         std::error_code Del(const std::string& key);
         std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
 
-        void Merge(DataLogFileWrapper* targetFile);
+        void Merge(DataLogFile* targetFile, const DataLogFile* writableFile);
     };
 }// namespace foxbatdb

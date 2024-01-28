@@ -24,6 +24,9 @@ namespace foxbatdb::error {
             case ProtocolErrorCode::kOptionExclusive:
                 return "Input option has another exclusive option(s)";
 
+            case ProtocolErrorCode::kNoProto:
+                return "unsupported protocol version";
+
             default:
                 return "Wrong Protocol Error Code";
         }

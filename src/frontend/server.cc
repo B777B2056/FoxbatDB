@@ -23,16 +23,8 @@ namespace foxbatdb {
     void CMDSession::WritePublishMsg(const std::string& channel,
                                      const std::string& msg) {
         auto self(shared_from_this());
-        DoWrite(utils::BuildPubSubResponse(
-                std::vector<std::string>{"message", channel, msg}));
+        DoWrite(utils::BuildPubSubResponse("message", channel, msg));
     }
-
-#ifdef _FOXBATDB_SELF_TEST
-    std::string CMDSession::DoExecOneCmd(const ParseResult& result) {
-        auto self(shared_from_this());
-        return mExecutor_.DoExecOneCmd(weak_from_this(), result);
-    }
-#endif
 
     void CMDSession::DoRead() {
         auto self(shared_from_this());
@@ -67,9 +59,9 @@ namespace foxbatdb {
             return;
         }
 
-        if (result.ec)
+        if (result.ec) {
             DoWrite(utils::BuildErrorResponse(result.ec));
-        else {
+        } else {
             DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
             if (result.isWriteCmd) {
                 OperationLog::GetInstance().AppendCommand(std::move(result.data));

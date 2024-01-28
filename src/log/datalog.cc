@@ -8,7 +8,6 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace foxbatdb {
     static constexpr std::string_view CFileNamePrefix = "foxbat-";
@@ -49,9 +48,9 @@ namespace foxbatdb {
                 ServerLog::GetInstance().Fatal("log file create failed: {}", ::strerror(errno));
             }
             mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
-        mAvailableNode_ = mLogFilePool_.begin();
+        mWritableFileIter_ = mLogFilePool_.begin();
     }
 
     DataLogFileManager& DataLogFileManager::GetInstance() {
@@ -61,17 +60,12 @@ namespace foxbatdb {
 
     void DataLogFileManager::Init() {}
 
-    DataLogFileWrapper* DataLogFileManager::GetAvailableLogFile() {
-        std::unique_lock lock{mt};
-        if (std::filesystem::file_size((*mAvailableNode_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
-            if (std::next(mAvailableNode_, 1) == mLogFilePool_.end())
+    DataLogFile* DataLogFileManager::GetWritableDataFile() {
+        if (std::filesystem::file_size((*mWritableFileIter_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
+            if (std::next(mWritableFileIter_, 1) == mLogFilePool_.end())
                 PoolExpand();
         }
-        return mAvailableNode_->get();
-    }
-
-    bool DataLogFileManager::IsRecordInCurrentAvailableLogFile(const RecordObject& record) const {
-        return mAvailableNode_->get() == record.GetDataLogFileHandler();
+        return mWritableFileIter_->get();
     }
 
     void DataLogFileManager::PoolExpand() {
@@ -86,16 +80,15 @@ namespace foxbatdb {
             }
 
             mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
 
-        if (std::next(mAvailableNode_, 1) != mLogFilePool_.end()) {
-            ++mAvailableNode_;
+        if (std::next(mWritableFileIter_, 1) != mLogFilePool_.end()) {
+            ++mWritableFileIter_;
         }
     }
 
-    bool DataLogFileManager::LoadHistoryTxFromDisk(DataLogFileWrapper* fileWrapper,
-                                                   std::uint64_t txNum) {
+    static bool LoadHistoryTxFromDisk(DataLogFile* fileWrapper, std::uint64_t txNum) {
         auto& file = fileWrapper->file;
         auto& dbm = DatabaseManager::GetInstance();
 
@@ -128,28 +121,37 @@ namespace foxbatdb {
         return true;
     }
 
-    void DataLogFileManager::LoadHistoryRecordsFromDisk() {
-        auto& dbm = DatabaseManager::GetInstance();
+    static bool ValidateDataLogFile(const std::filesystem::directory_entry& dir) {
         std::stringstream ss;
         ss << Flags::GetInstance().dbLogFileDir << "/" << CFileNamePrefix
            << "[[:digit:]]+\\" << CFileNameSuffix;
-        std::regex regexpr{ss.str()};
-        // 获取目标目录下匹配日志文件格式的所有文件名
-        std::vector<std::string> fileNames;
-        for (auto& p: std::filesystem::directory_iterator{Flags::GetInstance().dbLogFileDir}) {
-            if (!p.exists() ||
-                !p.is_regular_file() ||
-                !p.file_size() ||
-                !std::regex_match(p.path().string(), regexpr))
-                continue;
-            fileNames.emplace_back(p.path().string());
-        }
+        std::regex pathValidator{ss.str()};
+        if (!dir.exists() ||
+            !dir.is_regular_file() ||
+            !dir.file_size() ||
+            !std::regex_match(dir.path().string(), pathValidator))
+            return false;
+        return true;
+    }
 
-        if (fileNames.empty())
-            return;
+    // 获取目标目录下匹配日志文件格式的所有文件名
+    static std::vector<std::string> GetDataLogFileNamesInDirectory() {
+        std::vector<std::string> fileNames;
+        for (const auto& p: std::filesystem::directory_iterator{Flags::GetInstance().dbLogFileDir}) {
+            if (ValidateDataLogFile(p))
+                fileNames.emplace_back(p.path().string());
+        }
+        std::sort(fileNames.begin(), fileNames.end());
+        return fileNames;
+    }
+
+    // 将历史文件纳入文件池统一管理
+    bool DataLogFileManager::FillDataLogFilePoolByHistoryDataFile() {
+        // 获取目标目录下匹配日志文件格式的所有文件名
+        auto fileNames = GetDataLogFileNamesInDirectory();
+        if (fileNames.empty()) return false;
 
         // 按文件名字典序填充文件池
-        std::sort(fileNames.begin(), fileNames.end());
         for (const auto& fileName: fileNames) {
             std::fstream file{fileName, std::ios::in | std::ios::out |
                                                 std::ios::binary | std::ios::app};
@@ -158,40 +160,50 @@ namespace foxbatdb {
                 continue;
             }
             mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFileWrapper>(fileName, std::move(file)));
+                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
+        return true;
+    }
+
+    static void LoadHistoryRecordsFromSingleFile(DataLogFile* fileWrapper) {
+        for (auto& file = fileWrapper->file; !file.eof();) {
+            auto pos = file.tellg();
+            FileRecord record;
+            if (!FileRecord::LoadFromDisk(record, file, pos)) break;
+
+            if (TxRuntimeState::kData == record.header.txRuntimeState) {
+                // 恢复普通数据记录
+                if (record.header.valSize && !record.data.value.empty())
+                    DatabaseManager::GetInstance()
+                            .GetDBByIndex(record.header.dbIdx)
+                            ->LoadHistoryData(fileWrapper, pos, record);
+            } else {
+                // 恢复事务记录
+                if (TxRuntimeState::kBegin != record.header.txRuntimeState)
+                    break;
+
+                if (!LoadHistoryTxFromDisk(fileWrapper, record.header.keySize))
+                    break;
+            }
+        }
+    }
+
+    void DataLogFileManager::LoadHistoryRecordsFromDisk() {
+        // 加载历史数据
+        if (!FillDataLogFilePoolByHistoryDataFile())
+            return;
 
         // 依次读文件填充dict
         for (auto& fileWrapper: mLogFilePool_) {
-            auto& file = fileWrapper->file;
-            while (!file.eof()) {
-                FileRecord record;
-                auto pos = file.tellg();
-                if (!FileRecord::LoadFromDisk(record, file, pos)) break;
-
-                if (TxRuntimeState::kData == record.header.txRuntimeState) {
-                    // 恢复普通数据记录
-                    if (record.header.valSize && !record.data.value.empty()) {
-                        dbm.GetDBByIndex(record.header.dbIdx)
-                                ->LoadHistoryData(fileWrapper.get(), pos, record);
-                    }
-                } else {
-                    // 恢复事务记录
-                    if (TxRuntimeState::kBegin != record.header.txRuntimeState)
-                        break;
-
-                    if (!LoadHistoryTxFromDisk(fileWrapper.get(), record.header.keySize))
-                        break;
-                }
-            }
-
-            file.clear();
+            LoadHistoryRecordsFromSingleFile(fileWrapper.get());
+            fileWrapper->file.clear();
         }
+
         // 设置可用文件位置
-        mAvailableNode_ = std::prev(mLogFilePool_.end());
+        mWritableFileIter_ = std::prev(mLogFilePool_.end());
     }
 
-    static std::unique_ptr<DataLogFileWrapper> CreateMergeLogFile() {
+    static std::unique_ptr<DataLogFile> CreateMergeLogFile() {
         // 创建merge文件
         auto mergeFileName = BuildLogFileName("merge");
         std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
@@ -202,13 +214,12 @@ namespace foxbatdb {
         }
 
         // 新建文件结构
-        return std::make_unique<DataLogFileWrapper>(mergeFileName, std::move(mergeFile));
+        return std::make_unique<DataLogFile>(mergeFileName, std::move(mergeFile));
     }
 
-    void DataLogFileManager::ModifyDataFilesForMerge(std::unique_ptr<DataLogFileWrapper>&& mergeLogFile) {
-        std::unique_lock lock{mt};
+    void DataLogFileManager::ModifyDataFilesForMerge(FileIter& writableNode, FilePtr&& mergeLogFile) {
         // 向文件池插入merge文件
-        auto mergeFileIter = mLogFilePool_.insert(mAvailableNode_, std::move(mergeLogFile));
+        auto mergeFileIter = mLogFilePool_.insert(writableNode, std::move(mergeLogFile));
 
         // 删除原先的只读文件
         for (auto it = mLogFilePool_.begin(); it != mergeFileIter;) {
@@ -224,13 +235,17 @@ namespace foxbatdb {
         }
 
         // 设置可用文件位置
-        mAvailableNode_ = std::prev(mLogFilePool_.end());
+        mWritableFileIter_ = std::prev(mLogFilePool_.end());
     }
 
     void DataLogFileManager::Merge() {
-        if (auto mergeLogFile = CreateMergeLogFile(); mergeLogFile) {// 创建merge文件
-            DatabaseManager::GetInstance().Merge(mergeLogFile.get());// 合并db文件
-            this->ModifyDataFilesForMerge(std::move(mergeLogFile));  // 修改磁盘文件组织
+        if (mLogFilePool_.size() < 2) return;
+        auto writableIterSnapshot = mWritableFileIter_;
+
+        auto& dbm = DatabaseManager::GetInstance();
+        if (auto mergeLogFile = CreateMergeLogFile(); mergeLogFile) {                    // 创建merge文件
+            dbm.Merge(mergeLogFile.get(), writableIterSnapshot->get());                  // 合并db文件
+            this->ModifyDataFilesForMerge(writableIterSnapshot, std::move(mergeLogFile));// 修改磁盘文件组织
         }
     }
 }// namespace foxbatdb

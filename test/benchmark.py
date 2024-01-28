@@ -4,6 +4,7 @@ import time
 import random
 import string
 import math
+import utils
 from enum import Enum
 from typing import List
 import matplotlib.pyplot as plt
@@ -16,13 +17,8 @@ StrSizeList = [2 ** i for i in range(int(math.log(MinimumStrSize, 2)), int(math.
 
 
 def InitTestDataSet() -> None:
-    def generateRandomStr(length: int) -> str:
-        str_list = [random.choice(string.digits + string.ascii_letters) for _ in range(length)]
-        random_str = ''.join(str_list)
-        return random_str
-
     for size in StrSizeList:
-        TestDataSet.append(generateRandomStr(size))
+        TestDataSet.append(utils.generateRandomStr(size))
 
 
 def BenchmarkSet(clt: redis.client.Redis) -> List[float]:

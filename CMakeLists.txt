@@ -1,11 +1,8 @@
-﻿cmake_minimum_required (VERSION 3.27)
-project ("FoxbatDB" VERSION "0.0.1")
+﻿cmake_minimum_required(VERSION 3.27)
+project("FoxbatDB" VERSION "0.0.1")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_BUILD_TYPE "Debug")
-# set(CMAKE_BUILD_TYPE "Release")
 
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb -fPIC -no-pie")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall -fPIC -no-pie")
@@ -25,5 +22,3 @@ file(GLOB_RECURSE SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc")
 
 add_executable(${PROJECT_NAME} "main.cc" ${SRC})
 target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads spdlog::spdlog)
-
-add_subdirectory("test")

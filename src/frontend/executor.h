@@ -11,7 +11,7 @@ namespace foxbatdb {
     class CMDSession;
     class Database;
     class ParseResult;
-    struct DataLogFileWrapper;
+    struct DataLogFile;
 
     enum class TxState : std::int8_t {
         kNoTx = 0,
@@ -21,11 +21,13 @@ namespace foxbatdb {
         kDiscard,
     };
 
+    class RecordObject;
+
     class CMDExecutor {
     private:
         struct TxUndoInfo {
-            DataLogFileWrapper* dbFile;
-            std::streampos readPos;
+            std::string key;
+            std::shared_ptr<RecordObject> snapshot;
         };
 
         struct CommandInfo {

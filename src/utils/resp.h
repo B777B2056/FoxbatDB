@@ -21,6 +21,7 @@ namespace foxbatdb {
                                 const std::string& bignum);
         */
 
+        void BuildNilResp(std::string& resp);
         void BuildNullResp(std::string& resp);
         void BuildArrayResp(std::string& resp,
                             const std::vector<std::string>& params);
@@ -70,11 +71,17 @@ namespace foxbatdb {
             }
         };
 
-        // Set类型RESP
+        // Helper
+        template<typename T, typename... Args>
+        void BuildPubSubResponseHelper(std::vector<std::string>& list, const T& param) {
+            list.emplace_back(detail::ResponseBuilder<T>{}(param));
+        }
 
-        // Map类型RESP
-
-        // Pushes类型RESP
+        template<typename T, typename... Args>
+        void BuildPubSubResponseHelper(std::vector<std::string>& list, const T& param, const Args&... args) {
+            list.emplace_back(detail::ResponseBuilder<T>{}(param));
+            BuildPubSubResponseHelper(list, args...);
+        }
     }// namespace detail
 
     namespace utils {
@@ -86,18 +93,34 @@ namespace foxbatdb {
         std::string BuildArrayResponseWithFilledItems(const std::vector<std::string>& list);
         std::string BuildErrorResponse(std::error_code err);
 
-        template<typename T>
-        std::string BuildPubSubResponse(const std::vector<T>& data) {
+        template<typename... Args>
+        std::string BuildPubSubResponse(const Args&... args) {
             std::string resp;
             std::vector<std::string> list;
-            for (const T& param: data) {
-                list.emplace_back(detail::ResponseBuilder<T>{}(param));
-            }
+            detail::BuildPubSubResponseHelper(list, args...);
             detail::BuildPushesResp(resp, list);
             return resp;
         }
 
         const static std::string OK_RESPONSE = BuildResponse("OK");
+        const static std::string NIL_RESPONSE = []() -> std::string {
+            std::string resp;
+            detail::BuildNilResp(resp);
+            return resp;
+        }();
+        const static std::string NULL_RESPONSE = []() -> std::string {
+            std::string resp;
+            detail::BuildNullResp(resp);
+            return resp;
+        }();
         const static std::string QUEUED_RESPONSE = BuildResponse("QUEUED");
+        const static std::string HELLO_RESPONSE = []() -> std::string {
+            std::string resp;
+            detail::BuildMapResp(resp, {{BuildResponse("server"), BuildResponse("foxbatdb")},
+                                        {BuildResponse("version"), BuildResponse("1.0.0")},
+                                        {BuildResponse("proto"), BuildResponse(3)},
+                                        {BuildResponse("mode"), BuildResponse("standalone")}});
+            return resp;
+        }();
     }// namespace utils
 }// namespace foxbatdb

@@ -88,7 +88,7 @@ namespace foxbatdb {
             if (err) {
                 mDB_->InsertTxFlag(TxRuntimeState::kFailed);
                 RollbackTx();
-                return utils::BuildErrorResponse(error::RuntimeErrorCode::kTxError);
+                return utils::NULL_RESPONSE;
             }
             resps.emplace_back(resp);
         }
@@ -98,22 +98,17 @@ namespace foxbatdb {
     }
 
     void CMDExecutor::AppendUndoLog(const Command& cmd) {
-        auto valObj = mDB_->Get(cmd.argv[0]);
-        if (valObj.expired()) return;
-
-        mTxUndo_.emplace_back(
-                TxUndoInfo{
-                        .dbFile = valObj.lock()->GetDataLogFileHandler(),
-                        .readPos = valObj.lock()->GetFileOffset(),
-                });
+        mTxUndo_.emplace_back(cmd.argv[0], mDB_->GetRecordSnapshot(cmd.argv[0]));
     }
 
     void CMDExecutor::RollbackTx() {
         std::for_each(mTxUndo_.rbegin(), mTxUndo_.rend(),
                       [this](const TxUndoInfo& info) -> void {
-                          FileRecord data;
-                          if (FileRecord::LoadFromDisk(data, info.dbFile->file, info.readPos))
-                              mDB_->LoadHistoryData(info.dbFile, info.readPos, data);
+                          if (info.snapshot) {
+                              mDB_->RecoverRecordWithSnapshot(info.key, info.snapshot);
+                          } else {
+                              mDB_->Del(info.key);
+                          }
                       });
         CancelTxMode();
     }
@@ -184,7 +179,7 @@ namespace foxbatdb {
                 resp = ExecTx(weak);
                 break;
             case TxState::kDiscard:
-                RollbackTx();
+                CancelTxMode();
                 resp = utils::OK_RESPONSE;
                 break;
             default:

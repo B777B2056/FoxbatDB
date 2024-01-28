@@ -80,6 +80,14 @@ namespace foxbatdb {
                              .maxArgc = 1,
                      }},
 
+                    {"exists",
+                     detail::MainCommandWrapper{
+                             .call = &Exists,
+                             .isWriteCmd = false,
+                             .minArgc = 1,
+                             .maxArgc = 1,
+                     }},
+
                     {"del",
                      detail::MainCommandWrapper{
                              .call = &Del,
@@ -152,12 +160,12 @@ namespace foxbatdb {
                              .maxArgc = 15,
                      }},
 
-                    {"load",
+                    {"hello",
                      detail::MainCommandWrapper{
-                             .call = &Load,
+                             .call = &Hello,
                              .isWriteCmd = false,
                              .minArgc = 1,
-                             .maxArgc = 15,
+                             .maxArgc = 1,
                      }},
 
                     {"merge",
@@ -174,30 +182,6 @@ namespace foxbatdb {
                              .isWriteCmd = false,
                              .minArgc = 1,
                              .maxArgc = 1,
-                     }},
-
-                    {"command",
-                     detail::MainCommandWrapper{
-                             .call = &CommandDB,
-                             .isWriteCmd = false,
-                             .minArgc = 0,
-                             .maxArgc = 0,
-                     }},
-
-                    {"info",
-                     detail::MainCommandWrapper{
-                             .call = &InfoDB,
-                             .isWriteCmd = false,
-                             .minArgc = 0,
-                             .maxArgc = 0,
-                     }},
-
-                    {"server",
-                     detail::MainCommandWrapper{
-                             .call = &ServerDB,
-                             .isWriteCmd = false,
-                             .minArgc = 0,
-                             .maxArgc = 0,
                      }},
             };
 

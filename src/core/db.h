@@ -41,11 +41,12 @@ namespace foxbatdb {
         std::int32_t PublishWithChannel(const std::string& channel,
                                         const std::string& msg);
 
-        void Merge(DataLogFileWrapper* targetFile);
+        void Merge(DataLogFile* targetFile, const DataLogFile* writableFile);
     };
 
     class Database {
     private:
+        std::uint8_t mDBIdx_;
         MemoryIndex mIndex_;
         MaxMemoryStrategy* mMaxMemoryStrategy_;
         std::unordered_map<std::string, std::vector<std::weak_ptr<CMDSession>>> mWatchedMap_;
@@ -66,9 +67,12 @@ namespace foxbatdb {
         void ReleaseMemory();
         bool HaveMemoryAvailable() const;
 
+        std::shared_ptr<RecordObject> GetRecordSnapshot(const std::string& key);
+        void RecoverRecordWithSnapshot(const std::string& key, std::shared_ptr<RecordObject> snapshot);
+
         void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
 
-        void LoadHistoryData(DataLogFileWrapper* file, std::streampos pos,
+        void LoadHistoryData(DataLogFile* file, std::streampos pos,
                              const FileRecord& record);
 
         std::tuple<std::error_code, std::optional<std::string>> StrSet(
@@ -84,6 +88,6 @@ namespace foxbatdb {
 
         std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
 
-        void Merge(DataLogFileWrapper* targetFile);
+        void Merge(DataLogFile* targetFile, const DataLogFile* writableFile);
     };
 }// namespace foxbatdb
