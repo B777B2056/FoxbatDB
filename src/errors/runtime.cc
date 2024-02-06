@@ -39,6 +39,9 @@ namespace foxbatdb::error {
             case RuntimeErrorCode::kInvalidTxCmd:
                 return "Invalid tx command";
 
+            case RuntimeErrorCode::kInvalidValueType:
+                return "Invalid value type";
+
             default:
                 return "Wrong Runtime Error Code";
         }

@@ -85,6 +85,7 @@ namespace foxbatdb {
 
     void FileRecordHeader::DumpToDisk(std::fstream& file) {
         this->TransferEndian();
+        file.seekp(0, std::fstream::end);
         file.write(reinterpret_cast<const char*>(&this->crc), sizeof(this->crc));
         file.write(reinterpret_cast<const char*>(&this->timestamp), sizeof(this->timestamp));
         file.write(reinterpret_cast<const char*>(&this->txRuntimeState), sizeof(this->txRuntimeState));
@@ -126,8 +127,9 @@ namespace foxbatdb {
         if (!record.header.LoadFromDisk(file, pos))
             return false;
 
-        if (TxRuntimeState::kData == record.header.txRuntimeState)
+        if (TxRuntimeState::kData == record.header.txRuntimeState) {
             FileRecordData::LoadFromDisk(record.data, file, record.header.keySize, record.header.valSize);
+        }
 
         return record.header.CheckCRC(record.data.key, record.data.value);
     }
@@ -176,6 +178,7 @@ namespace foxbatdb {
     std::string RecordObject::GetValue() const {
         FileRecord record;
         if (FileRecord::LoadFromDisk(record, meta.logFilePtr->file, meta.pos)) {
+            meta.logFilePtr->file.seekp(0, std::fstream::end);
             return record.data.value;
         } else {
             return {};
@@ -185,9 +188,8 @@ namespace foxbatdb {
     void RecordObject::DumpToDisk(const std::string& k, const std::string& v) {
         if (k.empty() || v.empty()) return;
 
-        auto logFile = meta.logFilePtr;
+        auto* logFile = meta.logFilePtr;
         // 当前record文件读指针位置为写入数据之前的写指针位置
-        logFile->file.sync();
         meta.pos = logFile->file.tellp();
         // 刷入日志文件（磁盘）
         FileRecord::DumpRecordToDisk(logFile->file, meta.dbIdx, k, v);

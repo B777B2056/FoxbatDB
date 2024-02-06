@@ -89,5 +89,7 @@ namespace foxbatdb {
         std::vector<std::pair<std::string, std::string>> PrefixSearch(const std::string& prefix) const;
 
         void Merge(DataLogFile* targetFile, const DataLogFile* writableFile);
+
+        std::string StrGetRange(const std::string& key, std::int64_t start, std::int64_t end);
     };
 }// namespace foxbatdb

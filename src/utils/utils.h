@@ -19,22 +19,13 @@ namespace foxbatdb::utils {
     static constexpr std::uint32_t CRC_INIT_VALUE = 0xFFFFFFFF;
     std::uint32_t CRC(const char* buf, std::size_t size, std::uint32_t lastCRC = CRC_INIT_VALUE);
 
-    template<std::integral T>
-    std::optional<T> ToInteger(const std::string& data) {
-        T ret;
-        auto [_, ec] = std::from_chars<T>(data.data(), data.data() + data.size(), ret);
-        if (ec != std::errc()) {
-            return std::nullopt;
-        } else {
-            return ret;
-        }
-    }
+    template<typename T>
+    concept Number = std::is_integral_v<T> || std::is_floating_point_v<T>;
 
-    template<std::floating_point T>
-    std::optional<T> ToFloat(const std::string& data) {
+    template<typename T> requires Number<T>
+    std::optional<T> ToNumber(const std::string& data) {
         T ret;
-        auto [_, ec] = std::from_chars<T>(
-                data.data(), data.data() + data.size(), ret);
+        auto [_, ec] = std::from_chars(data.data(), data.data() + data.size(), ret);
         if (ec != std::errc()) {
             return std::nullopt;
         } else {

@@ -14,7 +14,8 @@ namespace foxbatdb::error {
         kNotInTx,
         kTxError,
         kWatchedKeyModified,
-        kInvalidTxCmd
+        kInvalidTxCmd,
+        kInvalidValueType
     };
 
     class RuntimeErrorCategory : public std::error_category {

@@ -6,7 +6,7 @@
 
 namespace foxbatdb {
     namespace detail {
-        static constexpr std::uint8_t MAX_PARAM_COUNT = -1;
+        static constexpr std::uint16_t MAX_PARAM_COUNT = -1;
 
         void ParamCountStartState::react(RequestParser& fsm) {
             if ('*' == fsm.GetCurrentInput()) {
@@ -175,7 +175,12 @@ namespace foxbatdb {
             for (; i < paramList.size(); ++i) {
                 if (TestMainCommandOptionAndTolower(paramList.at(i))) {
                     const auto& cmdOptInfo = CommandOptionMap.at(paramList.at(i));
-                    data.options.emplace_back(std::move(paramList.at(i)), cmdOptInfo.type);
+                    CommandOption option {
+                            .name=std::move(paramList.at(i)),
+                            .type=cmdOptInfo.type,
+                            .argv={}
+                    };
+                    data.options.emplace_back(std::move(option));
                 } else {
                     data.options.back().argv.emplace_back(std::move(paramList.at(i)));
                 }

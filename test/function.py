@@ -3,6 +3,7 @@ import redis
 import utils
 import copy
 import time
+import random
 from typing import Dict
 from threading import Thread
 
@@ -121,6 +122,101 @@ class TestKeyValueOperators(unittest.TestCase):
 
         for k, _ in dataset.items():
             self.assertFalse(self.client.exists(k))
+
+    def test_move(self):
+        dataset = generateTestDataSet(TestKeyValueOperators.DataSetSize)
+        for k, v in dataset.items():
+            self.assertTrue(self.client.set(k, v))
+
+        for k, v in dataset.items():
+            self.assertEqual(1, self.client.move(k, 1))
+
+        for k, v in dataset.items():
+            self.assertFalse(self.client.exists(k))
+
+        self.client.select(1)
+        for k, v in dataset.items():
+            self.assertEqual(v, self.client.get(k))
+
+    def test_getrange(self):
+        MaximumStrSize = 10
+        k = utils.generateRandomStr(MaximumStrSize)
+        v = utils.generateRandomStr(MaximumStrSize)
+        self.client.set(k, v)
+
+        self.assertEqual(v[3:], self.client.getrange(k, 3, -1))
+        self.assertEqual(v[-MaximumStrSize:], self.client.getrange(k, -MaximumStrSize, -1))
+        self.assertEqual(v[3:int(MaximumStrSize/2)+1], self.client.getrange(k, 3, int(MaximumStrSize/2)))
+        self.assertEqual(v[3:], self.client.getrange(k, 3, MaximumStrSize+9))
+
+    def test_mset_mget(self):
+        dataset = generateTestDataSet(32)
+        self.client.mset(dataset)
+
+        data = set(self.client.mget([key for key, _ in dataset.items()]))
+        for _, v in dataset.items():
+            self.assertTrue(v in data)
+
+    def test_strlen(self):
+        dataset = generateTestDataSet(TestKeyValueOperators.DataSetSize)
+        for k, v in dataset.items():
+            self.assertTrue(self.client.set(k, v))
+
+        for k, v in dataset.items():
+            self.assertEqual(len(v), self.client.strlen(k))
+
+    def test_append(self):
+        dataset = generateTestDataSet(TestKeyValueOperators.DataSetSize)
+        suffix = "fghjmn vftyhjmnbnm,saasdasfs sfsd dffd"
+        for k, v in dataset.items():
+            self.assertTrue(self.client.set(k, v))
+
+        for k, _ in dataset.items():
+            self.client.append(k, suffix)
+
+        for k, v in dataset.items():
+            self.assertEqual(v + suffix, self.client.get(k))
+
+    def test_rename(self):
+        dataset = generateTestDataSet(TestKeyValueOperators.DataSetSize)
+        prefix = "fghjmn vftyhjmnbnm,saasdasfs sfsd dffd"
+        for k, v in dataset.items():
+            self.assertTrue(self.client.set(k, v))
+
+        for k, _ in dataset.items():
+            self.client.rename(k, prefix + k)
+
+        for k, v in dataset.items():
+            self.assertFalse(self.client.exists(k))
+            self.assertEqual(v, self.client.get(prefix + k))
+
+    def test_incr(self):
+        cnt = 100
+        k = utils.generateRandomStr(MaximumStrSize)
+        for _ in range(0, cnt):
+            self.client.incr(k)
+        self.assertEqual(str(cnt), self.client.get(k))
+
+    def test_decr(self):
+        cnt = 100
+        k = utils.generateRandomStr(MaximumStrSize)
+        for _ in range(0, cnt):
+            self.client.decr(k)
+        self.assertEqual(str(-cnt), self.client.get(k))
+
+    def test_incrby(self):
+        num = [i for i in range(1, 101)]
+        k = utils.generateRandomStr(MaximumStrSize)
+        for n in num:
+            self.client.incrby(k, n)
+        self.assertEqual(str(sum(num)), self.client.get(k))
+
+    def test_decrby(self):
+        num = [i for i in range(1, 101)]
+        k = utils.generateRandomStr(MaximumStrSize)
+        for n in num:
+            self.client.decrby(k, n)
+        self.assertEqual(str(-sum(num)), self.client.get(k))
 
 
 class TestTransaction(unittest.TestCase):

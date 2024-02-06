@@ -208,7 +208,7 @@ namespace foxbatdb {
         std::optional<std::string> data = std::nullopt;
         switch (opt.type) {
             case CmdOptionType::kEX: {
-                auto sec = utils::ToInteger<std::int64_t>(opt.argv.front());
+                auto sec = utils::ToNumber<std::int64_t>(opt.argv.front());
                 if (!sec.has_value()) {
                     err = error::ProtocolErrorCode::kSyntax;
                 } else {
@@ -216,7 +216,7 @@ namespace foxbatdb {
                 }
             } break;
             case CmdOptionType::kPX: {
-                auto ms = utils::ToInteger<std::int64_t>(opt.argv.front());
+                auto ms = utils::ToNumber<std::int64_t>(opt.argv.front());
                 if (!ms.has_value()) {
                     err = error::ProtocolErrorCode::kSyntax;
                 } else {
@@ -302,5 +302,31 @@ namespace foxbatdb {
 
     void Database::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
         mIndex_.Merge(targetFile, writableFile);
+    }
+
+    std::string Database::StrGetRange(const std::string& key, std::int64_t start, std::int64_t end) {
+        auto ptr = this->Get(key);
+        if (ptr.expired())  return "";
+
+        std::size_t startPos, endPos;
+        auto val = ptr.lock()->GetValue();
+        if (start < 0)
+            startPos = val.size() - static_cast<std::size_t>(std::abs(start));
+        else
+            startPos = static_cast<std::size_t>(std::abs(start));
+
+        if (end < 0) {
+            endPos = 1 + val.size() - static_cast<std::size_t>(std::abs(end));
+        } else {
+            endPos = 1 + static_cast<std::size_t>(std::abs(end));
+        }
+
+        if (endPos > val.size())
+            endPos = val.size();
+
+        if ((startPos > endPos) || (startPos >= val.size()))
+            return "";
+
+        return val.substr(startPos, endPos - startPos);
     }
 }// namespace foxbatdb
