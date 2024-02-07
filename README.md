@@ -126,7 +126,6 @@ make
 ### 4.2 读写性能
 
 * 使用[google/benchmark](https://github.com/google/benchmark)进行性能测试
-* 测试文件为test/benchmark/benchmark.cc  
   ![benchmark](images/benchamrk.png)
 
 ### 4.3 与Redis对比
