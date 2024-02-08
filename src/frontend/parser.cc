@@ -1,5 +1,4 @@
 ﻿#include "parser.h"
-#include "utils/resp.h"
 #include <cctype>
 #include <istream>
 #include <unordered_map>
@@ -175,11 +174,10 @@ namespace foxbatdb {
             for (; i < paramList.size(); ++i) {
                 if (TestMainCommandOptionAndTolower(paramList.at(i))) {
                     const auto& cmdOptInfo = CommandOptionMap.at(paramList.at(i));
-                    CommandOption option {
-                            .name=std::move(paramList.at(i)),
-                            .type=cmdOptInfo.type,
-                            .argv={}
-                    };
+                    CommandOption option{
+                            .name = std::move(paramList.at(i)),
+                            .type = cmdOptInfo.type,
+                            .argv = {}};
                     data.options.emplace_back(std::move(option));
                 } else {
                     data.options.back().argv.emplace_back(std::move(paramList.at(i)));

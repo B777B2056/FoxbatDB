@@ -60,7 +60,7 @@ namespace foxbatdb {
         }
 
         if (result.ec) {
-            DoWrite(utils::BuildErrorResponse(result.ec));
+            DoWrite(utils::BuildResponse(result.ec));
         } else {
             DoWrite(mExecutor_.DoExecOneCmd(weak_from_this(), result));
             if (result.isWriteCmd) {

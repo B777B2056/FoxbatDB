@@ -9,16 +9,7 @@
 
 namespace foxbatdb {
     namespace {
-        ProcResult MakeProcResult(std::error_code err) {
-            return ProcResult{.hasError = true, .data = {utils::BuildErrorResponse(err)}};
-        }
-
-        ProcResult MakeProcResult(const std::vector<std::string>& list) {
-            return ProcResult{.hasError = true, .data = {utils::BuildArrayResponseWithFilledItems(list)}};
-        }
-
         template<typename T>
-            requires(!std::is_same_v<T, std::error_code>)
         ProcResult MakeProcResult(const T& data) {
             return ProcResult{.hasError = false, .data = utils::BuildResponse<T>(data)};
         }
@@ -99,7 +90,7 @@ namespace foxbatdb {
                 return MakeProcResult(1);
             }
         }
-        return ProcResult{.hasError=true, .data=utils::BuildResponse(0)};
+        return ProcResult{.hasError = true, .data = utils::BuildResponse(0)};
     }
 
     ProcResult Watch(std::weak_ptr<CMDSession> weak, const Command& cmd) {
@@ -219,7 +210,7 @@ namespace foxbatdb {
         }
 
         std::vector<std::string> ret;
-        for (const auto& key : cmd.argv) {
+        for (const auto& key: cmd.argv) {
             auto val = clt->CurrentDB()->StrGet(key);
             if (!val.has_value() || val->empty()) {
                 ret.emplace_back(utils::NIL_RESPONSE);
@@ -421,7 +412,8 @@ namespace foxbatdb {
         return OKResp();
     }
 
-    template <typename T> requires utils::Number<T>
+    template<typename T>
+        requires utils::Number<T>
     std::tuple<std::error_code, T> NumberOperateHelper(Database* db, const std::string& key, const std::string& offsetStr) {
         auto offset = utils::ToNumber<T>(offsetStr);
         if (!offset.has_value()) {
@@ -499,7 +491,7 @@ namespace foxbatdb {
 
         auto offset = cmd.argv[1];
         if ('-' != offset.front())
-            offset = std::string {"-"} + offset;
+            offset = std::string{"-"} + offset;
 
         auto [ec, _] = NumberOperateHelper<std::int64_t>(db, key, offset);
         if (ec)
@@ -512,7 +504,7 @@ namespace foxbatdb {
         if (!clt) {
             return MakeProcResult(error::RuntimeErrorCode::kIntervalError);
         }
-        
+
         const auto& key = cmd.argv[0];
         auto* db = clt->CurrentDB();
         auto [ec, ret] = NumberOperateHelper<double>(db, key, cmd.argv[1]);

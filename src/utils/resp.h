@@ -52,21 +52,11 @@ namespace foxbatdb {
                     BuildNullResp(resp);
                 } else if constexpr (std::is_convertible_v<T, std::error_code>) {
                     BuildSimpleErrorResp(resp, data);
+                } else if constexpr (std::is_same_v<std::vector<std::string>, T>) {
+                    BuildArrayResp(resp, data);
+                } else {
+                    static_assert(data.NOT_EXISTS_METHOD());
                 }
-                return resp;
-            }
-        };
-
-        // 数组类型RESP
-        template<typename U>
-        struct ResponseBuilder<std::vector<U>> {
-            std::string operator()(const std::vector<U>& data) {
-                std::string resp;
-                std::vector<std::string> list;
-                for (const U& param: data) {
-                    list.emplace_back(ResponseBuilder<U>{}(param));
-                }
-                BuildArrayResp(resp, list);
                 return resp;
             }
         };
@@ -89,9 +79,6 @@ namespace foxbatdb {
         std::string BuildResponse(const T& data) {
             return detail::ResponseBuilder<T>{}(data);
         }
-
-        std::string BuildArrayResponseWithFilledItems(const std::vector<std::string>& list);
-        std::string BuildErrorResponse(std::error_code err);
 
         template<typename... Args>
         std::string BuildPubSubResponse(const Args&... args) {

@@ -94,7 +94,7 @@ namespace foxbatdb {
         }
         mDB_->InsertTxFlag(TxRuntimeState::kFinish);
         CancelTxMode();
-        return utils::BuildArrayResponseWithFilledItems(resps);
+        return utils::BuildResponse(resps);
     }
 
     void CMDExecutor::AppendUndoLog(const Command& cmd) {
@@ -145,14 +145,14 @@ namespace foxbatdb {
     std::string CMDExecutor::DoExecOneCmd(std::weak_ptr<CMDSession> weak, const ParseResult& result) {
         std::string resp;
         if (!SetTxStateByCMD(result.data)) {
-            resp = utils::BuildErrorResponse(error::RuntimeErrorCode::kInvalidTxCmd);
+            resp = utils::BuildResponse(error::RuntimeErrorCode::kInvalidTxCmd);
             RollbackTx();
             return resp;
         }
 
         switch (mTxState_) {
             case TxState::kNoTx:
-                resp = result.ec ? utils::BuildErrorResponse(result.ec) : Exec(weak, result.data);
+                resp = result.ec ? utils::BuildResponse(result.ec) : Exec(weak, result.data);
                 break;
             case TxState::kBegin:
                 EnableTxMode();
@@ -162,12 +162,12 @@ namespace foxbatdb {
                 if (!mCmdQueue_.empty() && !mCmdQueue_.back().isValidCmd) {
                     resp = mCmdQueue_.back().errmsg;
                 } else if (isTxFailedBefore_) {
-                    resp = utils::BuildErrorResponse(error::RuntimeErrorCode::kWatchedKeyModified);
+                    resp = utils::BuildResponse(error::RuntimeErrorCode::kWatchedKeyModified);
                 } else {
                     mCmdQueue_.emplace_back(CommandInfo{
                             .cmd = result.data,
                             .isValidCmd = (result.ec == error::ProtocolErrorCode::kSuccess),
-                            .errmsg = utils::BuildErrorResponse(result.ec),
+                            .errmsg = utils::BuildResponse(result.ec),
                     });
                     if (result.isWriteCmd) {
                         AppendUndoLog(result.data);
