@@ -79,6 +79,7 @@ namespace foxbatdb {
     }
 
     void MemoryIndex::Put(const std::string& key, std::shared_ptr<RecordObject> valObj) {
+        std::unique_lock l{mt_};
         mHATTrieTree_[key] = std::move(valObj);
     }
 
@@ -95,11 +96,15 @@ namespace foxbatdb {
             return error::RuntimeErrorCode::kMemoryOut;
         }
 
-        mHATTrieTree_[key] = valObj;
+        {
+            std::unique_lock l{mt_};
+            mHATTrieTree_[key] = valObj;
+        }
         return error::RuntimeErrorCode::kSuccess;
     }
 
     bool MemoryIndex::Contains(const std::string& key) const {
+        std::unique_lock l{mt_};
         return mHATTrieTree_.count(key) > 0;
     }
 
@@ -115,6 +120,7 @@ namespace foxbatdb {
     }
 
     std::weak_ptr<RecordObject> MemoryIndex::Get(const std::string& key) {
+        std::unique_lock l{mt_};
         if (!mHATTrieTree_.count(key)) {
             return {};
         }
@@ -129,6 +135,7 @@ namespace foxbatdb {
     }
 
     std::error_code MemoryIndex::Del(const std::string& key) {
+        std::unique_lock l{mt_};
         if (!mHATTrieTree_.count(key)) {
             return error::RuntimeErrorCode::kKeyNotFound;
         }
@@ -141,6 +148,8 @@ namespace foxbatdb {
 
     std::vector<std::pair<std::string, std::string>> MemoryIndex::PrefixSearch(const std::string& prefix) const {
         std::vector<std::pair<std::string, std::string>> ret;
+
+        std::unique_lock l{mt_};
         auto prefixRange = mHATTrieTree_.equal_prefix_range({prefix.data(), prefix.length()});
         for (auto it = prefixRange.first; it != prefixRange.second; ++it) {
             if (auto val = it.value()->GetValue(); !val.empty()) {
@@ -151,6 +160,7 @@ namespace foxbatdb {
     }
 
     void MemoryIndex::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
+        std::unique_lock l{mt_};
         std::vector<std::string> expiredKeyList;
         for (auto it = mHATTrieTree_.cbegin(); it != mHATTrieTree_.cend(); ++it) {
             const auto& key = it.key();

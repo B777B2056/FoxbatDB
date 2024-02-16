@@ -5,6 +5,7 @@
 #include <list>
 #include <memory>
 #include <memory_resource>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -20,6 +21,9 @@ namespace foxbatdb {
         virtual void UpdateStateForWriteOp(const std::string& key) = 0;
         virtual bool ReleaseKey(MemoryIndex* engine) = 0;
         [[nodiscard]] virtual bool HaveMemoryAvailable() const = 0;
+
+    protected:
+        mutable std::mutex mt_;
     };
 
     class NoevictionStrategy : public MaxMemoryStrategy {
@@ -53,6 +57,7 @@ namespace foxbatdb {
 
     class RecordObjectPool {
     private:
+        mutable std::mutex mt_;
         std::array<std::byte, 128_KB> mMemoryPoolBuf_;
         std::pmr::monotonic_buffer_resource mMemoryPool_;
 
@@ -74,8 +79,5 @@ namespace foxbatdb {
         static RecordObjectPool& GetInstance();
 
         std::shared_ptr<RecordObject> Acquire(const RecordObjectMeta& meta);
-
-        [[maybe_unused]] [[nodiscard]] std::size_t GetPoolSize() const;
-        [[maybe_unused]] [[nodiscard]] std::size_t GetFreeObjectCount() const;
     };
 }// namespace foxbatdb

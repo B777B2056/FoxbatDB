@@ -42,6 +42,7 @@ namespace foxbatdb {
         void ClearOSFlag();
 
     private:
+        mutable std::mutex mt;
         std::string name;
         std::fstream file;
     };
@@ -52,6 +53,7 @@ namespace foxbatdb {
         using FileIter = std::list<FilePtr>::iterator;
 
     private:
+        mutable std::mutex mt_;
         std::list<FilePtr> mLogFilePool_;
         std::list<FilePtr>::iterator mWritableFileIter_;
 

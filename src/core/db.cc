@@ -23,12 +23,16 @@ namespace foxbatdb {
         }
 
         for (std::uint8_t i = 0; i < Flags::GetInstance().dbMaxNum; ++i) {
-            Database db{i, mMaxMemoryStrategy_};
-            mDBList_.push_back(std::move(db));
+            mDBList_.emplace_back(new Database(i, mMaxMemoryStrategy_));
         }
     }
 
-    DatabaseManager::~DatabaseManager() { delete mMaxMemoryStrategy_; }
+    DatabaseManager::~DatabaseManager() {
+        delete mMaxMemoryStrategy_;
+
+        for (Database* db: mDBList_)
+            delete db;
+    }
 
     DatabaseManager& DatabaseManager::GetInstance() {
         static DatabaseManager inst;
@@ -39,13 +43,13 @@ namespace foxbatdb {
 
     bool DatabaseManager::HaveMemoryAvailable() const {
         return std::any_of(mDBList_.begin(), mDBList_.end(),
-                           [](const Database& db) -> bool { return db.HaveMemoryAvailable(); });
+                           [](const Database* db) -> bool { return db->HaveMemoryAvailable(); });
     }
 
     void DatabaseManager::ScanDBForReleaseMemory() {
-        for (auto& db: mDBList_) {
-            if (db.HaveMemoryAvailable()) {
-                db.ReleaseMemory();
+        for (auto* db: mDBList_) {
+            if (db->HaveMemoryAvailable()) {
+                db->ReleaseMemory();
                 CancelNonWrite();
             }
         }
@@ -55,7 +59,7 @@ namespace foxbatdb {
     void DatabaseManager::CancelNonWrite() { mIsNonWrite_ = false; }
     bool DatabaseManager::IsInReadonlyMode() const { return mIsNonWrite_; }
     std::size_t DatabaseManager::GetDBListSize() const { return mDBList_.size(); }
-    Database* DatabaseManager::GetDBByIndex(std::size_t idx) { return &mDBList_[idx]; }
+    Database* DatabaseManager::GetDBByIndex(std::size_t idx) { return mDBList_[idx]; }
 
     void DatabaseManager::SubscribeWithChannel(const std::string& channel, std::weak_ptr<CMDSession> weak) {
         mPubSubChannel_.Subscribe(channel, weak);
@@ -71,8 +75,8 @@ namespace foxbatdb {
 
     void DatabaseManager::Merge(DataLogFile* targetFile, const DataLogFile* writableFile) {
         // 遍历DB中所有活跃的key和对应的内存记录
-        for (auto& db: mDBList_) {
-            db.Merge(targetFile, writableFile);
+        for (auto* db: mDBList_) {
+            db->Merge(targetFile, writableFile);
         }
     }
 
@@ -114,6 +118,7 @@ namespace foxbatdb {
     }
 
     void Database::NotifyWatchedClientSession(const std::string& key) {
+        std::unique_lock l{mt_};
         if (mWatchedMap_.contains(key)) {
             for (const auto& weak: mWatchedMap_.at(key)) {
                 if (auto clt = weak.lock(); clt) {
@@ -255,12 +260,16 @@ namespace foxbatdb {
         if (!cltPtr)
             return;
         cltPtr->AddWatchKey(key);
+
+        std::unique_lock l{mt_};
         mWatchedMap_[key].emplace_back(clt);
     }
 
     void Database::DelWatchKeyAndClient(const std::string& key) {
         if (!mIndex_.Contains(key))
             return;
+
+        std::unique_lock l{mt_};
         mWatchedMap_.erase(key);
     }
 

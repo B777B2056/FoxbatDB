@@ -69,10 +69,49 @@ namespace foxbatdb {
         }
     }
 
+    detail::IOContextPool::IOContextPool() : nextIOContext_{0} {
+        std::size_t poolSize = Flags::GetInstance().threadNum;
+        if (0 == poolSize)
+            throw std::runtime_error("thread num is 0");
+
+        for (std::size_t i = 0; i < poolSize; ++i) {
+            auto ioCtx = std::make_shared<asio::io_context>();
+            ioContexts_.push_back(ioCtx);
+            work_.push_back(asio::make_work_guard(*ioCtx));
+        }
+    }
+
+    void detail::IOContextPool::Run() {
+        std::vector<std::thread> threads;
+        threads.reserve(ioContexts_.size());
+        for (auto& io_context: ioContexts_)
+            threads.emplace_back([&io_context] { io_context->run(); });
+
+        for (auto& thread: threads) {
+            if (thread.joinable())
+                thread.join();
+        }
+    }
+
+    void detail::IOContextPool::Stop() {
+        for (auto& ioCtx: ioContexts_)
+            ioCtx->stop();
+    }
+
+    asio::io_context& detail::IOContextPool::GetIOContext() {
+        asio::io_context& ioCtx = *ioContexts_[nextIOContext_];
+        ++nextIOContext_;
+        if (nextIOContext_ == ioContexts_.size())
+            nextIOContext_ = 0;
+        return ioCtx;
+    }
+
     DBServer::DBServer()
-        : mIOContext_{},
-          mAcceptor_{mIOContext_, asio::ip::tcp::endpoint(asio::ip::tcp::v4(),
-                                                          Flags::GetInstance().port)} {
+        : ioContextPool_{},
+          signals_(ioContextPool_.GetIOContext()),
+          acceptor_{ioContextPool_.GetIOContext(), asio::ip::tcp::endpoint(asio::ip::tcp::v4(),
+                                                                           Flags::GetInstance().port)} {
+        this->DoWaitSignals();
         this->DoAccept();
     }
 
@@ -81,17 +120,31 @@ namespace foxbatdb {
         return instance;
     }
 
-    void DBServer::Run() { mIOContext_.run(); }
+    void DBServer::Run() { ioContextPool_.Run(); }
 
     void DBServer::DoAccept() {
-        this->mAcceptor_.async_accept(
+        this->acceptor_.async_accept(
                 [this](std::error_code ec, asio::ip::tcp::socket socket) {
+                    if (!acceptor_.is_open()) return;
+
                     if (!ec) {
                         std::make_shared<CMDSession>(std::move(socket))->Start();
                     } else {
                         ServerLog::GetInstance().Warning("accept connection failed: {}", ec.message());
                     }
                     this->DoAccept();
+                });
+    }
+
+    void DBServer::DoWaitSignals() {
+        signals_.add(SIGINT);
+        signals_.add(SIGTERM);
+#if defined(SIGQUIT)
+        signals_.add(SIGQUIT);
+#endif
+        signals_.async_wait(
+                [this](std::error_code /*ec*/, int /*signo*/) {
+                    this->ioContextPool_.Stop();
                 });
     }
 }// namespace foxbatdb

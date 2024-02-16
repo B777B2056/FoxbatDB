@@ -2,6 +2,8 @@
 #include "asio.hpp"
 #include "frontend/executor.h"
 #include "frontend/parser.h"
+#include <list>
+#include <memory>
 
 namespace foxbatdb {
     class Database;
@@ -38,22 +40,42 @@ namespace foxbatdb {
         void ProcessMsg(std::size_t bytesTransferred);
     };
 
+    namespace detail {
+        class IOContextPool {
+        public:
+            IOContextPool();
+            IOContextPool(const IOContextPool&) = delete;
+            IOContextPool& operator=(const IOContextPool&) = delete;
+
+            void Run();
+            void Stop();
+            asio::io_context& GetIOContext();
+
+        private:
+            std::vector<std::shared_ptr<asio::io_context>> ioContexts_;
+            std::list<asio::executor_work_guard<asio::io_context::executor_type>> work_;
+            std::size_t nextIOContext_;
+        };
+    }// namespace detail
+
     class DBServer {
     public:
         DBServer(const DBServer&) = delete;
         DBServer& operator=(const DBServer&) = delete;
-        DBServer(DBServer&&) = default;
-        DBServer& operator=(DBServer&&) = default;
+        DBServer(DBServer&&) = delete;
+        DBServer& operator=(DBServer&&) = delete;
         ~DBServer() = default;
 
         static DBServer& GetInstance();
         void Run();
 
     private:
-        asio::io_context mIOContext_;
-        asio::ip::tcp::acceptor mAcceptor_;
+        detail::IOContextPool ioContextPool_;
+        asio::signal_set signals_;
+        asio::ip::tcp::acceptor acceptor_;
 
         DBServer();
         void DoAccept();
+        void DoWaitSignals();
     };
 }// namespace foxbatdb

@@ -9,6 +9,7 @@ namespace foxbatdb {
     bool NoevictionStrategy::HaveMemoryAvailable() const { return false; }
 
     void LRUStrategy::Update(const std::string& key) const {
+        std::unique_lock l{mt_};
         if (queryMap.contains(key)) {
             lruList.splice(lruList.end(), lruList,
                            queryMap.at(key));
@@ -27,6 +28,7 @@ namespace foxbatdb {
     }
 
     bool LRUStrategy::ReleaseKey(MemoryIndex* engine) {
+        std::unique_lock l{mt_};
         auto& key = lruList.back();
         if (engine->Del(key)) {
             return false;
@@ -37,6 +39,7 @@ namespace foxbatdb {
     }
 
     bool LRUStrategy::HaveMemoryAvailable() const {
+        std::unique_lock l{mt_};
         if (lruList.empty() || queryMap.empty())
             return false;
         return true;
@@ -61,12 +64,14 @@ namespace foxbatdb {
     }
 
     std::shared_ptr<RecordObject> RecordObjectPool::Acquire(const RecordObjectMeta& meta) {
+        mt_.lock();
         if (mFreeObjects_.empty()) {
             this->ExpandPoolSize();
         }
 
         auto freeObj = mFreeObjects_.back();
         mFreeObjects_.pop_back();
+        mt_.unlock();
 
         if (freeObj) {
             freeObj->SetMeta(meta);
@@ -77,8 +82,10 @@ namespace foxbatdb {
     }
 
     void RecordObjectPool::Release(RecordObject* ptr) {
-        if (ptr)
+        if (ptr) {
+            std::unique_lock l{mt_};
             mFreeObjects_.emplace_back(ptr);
+        }
     }
 
     void RecordObjectPool::ExpandPoolSize() {
@@ -88,13 +95,5 @@ namespace foxbatdb {
             mFreeObjects_.emplace_back(ptr.get());
             mAllocatedObjects_.emplace_back(std::move(ptr));
         }
-    }
-
-    [[maybe_unused]] std::size_t RecordObjectPool::GetPoolSize() const {
-        return mAllocatedObjects_.size();
-    }
-
-    [[maybe_unused]] std::size_t RecordObjectPool::GetFreeObjectCount() const {
-        return mFreeObjects_.size();
     }
 }// namespace foxbatdb

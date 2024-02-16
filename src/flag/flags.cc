@@ -1,6 +1,7 @@
 #include "flags.h"
 #include "toml.hpp"
 #include <system_error>
+#include <thread>
 #include <unordered_map>
 
 namespace foxbatdb {
@@ -19,6 +20,7 @@ namespace foxbatdb {
 
         this->port = tbl["startup"]["listenPort"].value<std::uint16_t>().value();
         this->dbMaxNum = tbl["startup"]["databaseNumber"].value<std::uint8_t>().value();
+        this->threadNum = tbl["startup"]["threadNum"].value<std::size_t>().value();
         this->serverLogPath = tbl["startup"]["serverLogPath"].value<std::string>().value();
         this->serverLogMaxFileSize = tbl["startup"]["serverLogMaxFileSizeMB"].value<std::uint64_t>().value();
         this->serverLogMaxFileNumber = tbl["startup"]["serverLogMaxFileNumber"].value<std::uint64_t>().value();
@@ -44,11 +46,15 @@ namespace foxbatdb {
 
             this->maxMemoryPolicy = maxMemoryPolicyMap.at(maxMemoryPolicyStr);
         }
-        
+
         this->memorypoolMinSize = tbl["memory"]["memorypoolMinSize"].value<std::size_t>().value();
     }
 
     void Flags::Preprocess() {
+        if (0 == threadNum) {
+            threadNum = std::thread::hardware_concurrency();
+        }
+
         serverLogMaxFileSize = serverLogMaxFileSize * 1024 * 1024;
 
         if (dbLogFileDir.back() == '/') {

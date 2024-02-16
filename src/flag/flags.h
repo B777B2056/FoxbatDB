@@ -23,6 +23,7 @@ namespace foxbatdb {
         std::uint32_t valMaxBytes;
         MaxMemoryPolicyEnum maxMemoryPolicy;
         std::size_t memorypoolMinSize;
+        std::size_t threadNum;
 
         Flags(const Flags&) = delete;
         Flags& operator=(const Flags&) = delete;

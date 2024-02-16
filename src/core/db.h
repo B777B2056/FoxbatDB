@@ -2,6 +2,7 @@
 #include "engine.h"
 #include "pubsub.h"
 #include <cstddef>
+#include <mutex>
 #include <string>
 #include <tuple>
 
@@ -15,7 +16,7 @@ namespace foxbatdb {
     private:
         bool mIsNonWrite_;
         MaxMemoryStrategy* mMaxMemoryStrategy_;
-        std::vector<Database> mDBList_;
+        std::vector<Database*> mDBList_;
         PubSubWithChannel mPubSubChannel_;
 
         DatabaseManager();
@@ -48,6 +49,8 @@ namespace foxbatdb {
         std::uint8_t mDBIdx_;
         MemoryIndex mIndex_;
         MaxMemoryStrategy* mMaxMemoryStrategy_;
+
+        mutable std::mutex mt_;
         std::unordered_map<std::string, std::vector<std::weak_ptr<CMDSession>>> mWatchedMap_;
 
         std::tuple<std::error_code, std::optional<std::string>> StrSetWithOption(

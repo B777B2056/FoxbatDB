@@ -3,6 +3,7 @@
 #include "tsl/htrie_map.h"
 #include <chrono>
 #include <cstdint>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <vector>
@@ -43,6 +44,7 @@ namespace foxbatdb {
 
     class MemoryIndex {
     private:
+        mutable std::mutex mt_;
         std::uint8_t mDBIdx_;
         tsl::htrie_map<char, std::shared_ptr<RecordObject>> mHATTrieTree_;
 

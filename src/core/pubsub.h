@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 
@@ -9,6 +10,7 @@ namespace foxbatdb {
     class CMDSession;
     class PubSubWithChannel {
     private:
+        mutable std::mutex mt_;
         std::unordered_map<std::string, std::list<std::weak_ptr<CMDSession>>> mChannelMap_;
 
     public:

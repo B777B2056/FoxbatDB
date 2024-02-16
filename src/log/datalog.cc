@@ -191,17 +191,25 @@ namespace foxbatdb {
         }
     }
 
-    const std::string& DataLogFile::Name() const { return this->name; }
+    const std::string& DataLogFile::Name() const {
+        std::unique_lock l{mt};
+        return this->name;
+    }
 
     DataLogFile::OffsetType DataLogFile::GetRowBySequence(Data& data) {
         data.error = true;
-        if (this->file.eof())
-            return -1;
 
-        auto pos = this->file.tellg();
         FileRecord record;
-        if (!FileRecord::LoadFromDisk(record, file, pos)) {
-            return -1;
+        DataLogFile::OffsetType pos = -1;
+        {
+            std::unique_lock l{mt};
+            if (this->file.eof())
+                return -1;
+
+            pos = this->file.tellg();
+            if (!FileRecord::LoadFromDisk(record, file, pos)) {
+                return -1;
+            }
         }
 
         data.error = false;
@@ -219,6 +227,7 @@ namespace foxbatdb {
 
     DataLogFile::Data DataLogFile::GetDataByOffset(DataLogFile::OffsetType offset) {
         FileRecord record;
+        std::unique_lock l{mt};
         if (FileRecord::LoadFromDisk(record, file, offset)) {
             file.seekp(0, std::fstream::end);
             return DataLogFile::Data{
@@ -232,6 +241,7 @@ namespace foxbatdb {
     }
 
     DataLogFile::OffsetType DataLogFile::DumpToDisk(std::uint8_t dbIdx, const std::string& k, const std::string& v) {
+        std::unique_lock l{mt};
         DataLogFile::OffsetType pos = file.tellp();
         FileRecordHeader header{
                 .crc = 0,
@@ -258,16 +268,22 @@ namespace foxbatdb {
                 .keySize = (RecordState::kBegin == txFlag) ? txCmdNum : 0,
                 .valSize = 0};
         header.SetCRC("", "");
+
+        std::unique_lock l{mt};
         header.DumpToDisk(file);
         file.flush();
     }
 
     void DataLogFile::Rename(const std::string& newName) {
+        std::unique_lock l{mt};
         std::filesystem::rename(this->name, newName);
         this->name = newName;
     }
 
-    void DataLogFile::ClearOSFlag() { this->file.clear(); }
+    void DataLogFile::ClearOSFlag() {
+        std::unique_lock l{mt};
+        this->file.clear();
+    }
 
     DataLogFileManager::DataLogFileManager() {
         // 加载历史数据
@@ -305,6 +321,7 @@ namespace foxbatdb {
     void DataLogFileManager::Init() {}
 
     DataLogFile* DataLogFileManager::GetWritableDataFile() {
+        std::unique_lock l{mt_};
         if (std::filesystem::file_size((*mWritableFileIter_)->Name()) > Flags::GetInstance().dbLogFileMaxSize) {
             if (std::next(mWritableFileIter_, 1) == mLogFilePool_.end())
                 PoolExpand();
@@ -469,6 +486,7 @@ namespace foxbatdb {
     }
 
     void DataLogFileManager::Merge() {
+        std::unique_lock l{mt_};
         if (mLogFilePool_.size() < 2) return;
         auto writableIterSnapshot = mWritableFileIter_;
 
