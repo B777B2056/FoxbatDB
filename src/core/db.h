@@ -26,7 +26,6 @@ namespace foxbatdb {
         ~DatabaseManager();
         static DatabaseManager& GetInstance();
         void Init();
-        bool LoadRecordsFromLogFile(const std::string& path);
         bool HaveMemoryAvailable() const;
         void ScanDBForReleaseMemory();
         void SetNonWrite();
@@ -70,10 +69,10 @@ namespace foxbatdb {
         std::shared_ptr<RecordObject> GetRecordSnapshot(const std::string& key);
         void RecoverRecordWithSnapshot(const std::string& key, std::shared_ptr<RecordObject> snapshot);
 
-        void InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum = 0);
+        void InsertTxFlag(RecordState txFlag, std::size_t txCmdNum = 0);
 
         void LoadHistoryData(DataLogFile* file, std::streampos pos,
-                             const FileRecord& record);
+                             const DataLogFile::Data& record);
 
         std::tuple<std::error_code, std::optional<std::string>> StrSet(
                 const std::string& key, const std::string& val,

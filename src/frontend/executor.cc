@@ -73,26 +73,26 @@ namespace foxbatdb {
         }
 
         std::vector<std::string> resps;
-        mDB_->InsertTxFlag(TxRuntimeState::kBegin, mCmdQueue_.size());
+        mDB_->InsertTxFlag(RecordState::kBegin, mCmdQueue_.size());
         while (!mCmdQueue_.empty()) {
             // 根据命令和对应参数，执行命令
             auto cmdInfo = mCmdQueue_.front();
             mCmdQueue_.pop_front();
             if (!cmdInfo.isValidCmd || isTxFailedBefore_) {
-                mDB_->InsertTxFlag(TxRuntimeState::kFailed);
+                mDB_->InsertTxFlag(RecordState::kFailed);
                 RollbackTx();
                 return cmdInfo.errmsg;
             }
 
             auto [err, resp] = ExecWithErrorFlag(weak, cmdInfo.cmd);
             if (err) {
-                mDB_->InsertTxFlag(TxRuntimeState::kFailed);
+                mDB_->InsertTxFlag(RecordState::kFailed);
                 RollbackTx();
                 return utils::NULL_RESPONSE;
             }
             resps.emplace_back(resp);
         }
-        mDB_->InsertTxFlag(TxRuntimeState::kFinish);
+        mDB_->InsertTxFlag(RecordState::kFinish);
         CancelTxMode();
         return utils::BuildResponse(resps);
     }

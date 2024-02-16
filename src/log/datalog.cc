@@ -2,6 +2,7 @@
 #include "core/db.h"
 #include "flag/flags.h"
 #include "serverlog.h"
+#include "utils/utils.h"
 #include <filesystem>
 #include <iterator>
 #include <regex>
@@ -22,6 +23,252 @@ namespace foxbatdb {
         return BuildLogFileName(std::to_string(idx));
     }
 
+    namespace {
+#if defined(__cpp_lib_hardware_interference_size)
+#include <bit>
+#define L1_CACHE_LINE_ALIGNAS alignas(std::hardware_destructive_interference_size)
+#elif defined(__x86_64__)
+#define L1_CACHE_LINE_ALIGNAS alignas(64)
+#elif defined(__aarch64__)
+#define L1_CACHE_LINE_ALIGNAS alignas(128)
+#else
+#define L1_CACHE_LINE_ALIGNAS
+#endif
+
+        struct L1_CACHE_LINE_ALIGNAS FileRecordHeader {
+            std::uint32_t crc = 0;
+            std::uint64_t timestamp = 0;
+            RecordState txRuntimeState = RecordState::kData;
+            std::uint8_t dbIdx = 0;
+            std::uint64_t keySize = 0;
+            std::uint64_t valSize = 0;
+
+            bool LoadFromDisk(std::fstream& file, std::streampos pos) {
+                if (pos < 0)
+                    return false;
+
+                file.seekg(pos, std::ios_base::beg);
+                file.read(reinterpret_cast<char*>(&this->crc), sizeof(this->crc));
+                file.read(reinterpret_cast<char*>(&this->timestamp), sizeof(this->timestamp));
+                file.read(reinterpret_cast<char*>(&this->txRuntimeState), sizeof(this->txRuntimeState));
+                file.read(reinterpret_cast<char*>(&this->dbIdx), sizeof(this->dbIdx));
+                file.read(reinterpret_cast<char*>(&this->keySize), sizeof(this->keySize));
+                file.read(reinterpret_cast<char*>(&this->valSize), sizeof(this->valSize));
+                this->TransferEndian();
+
+                if (RecordState::kData == txRuntimeState) {
+                    if (!this->ValidateFileRecordHeader())
+                        return false;
+                } else {
+                    if (!this->ValidateTxFlagRecord())
+                        return false;
+                }
+                return true;
+            }
+
+            void DumpToDisk(std::fstream& file) {
+                this->TransferEndian();
+                file.seekp(0, std::fstream::end);
+                file.write(reinterpret_cast<const char*>(&this->crc), sizeof(this->crc));
+                file.write(reinterpret_cast<const char*>(&this->timestamp), sizeof(this->timestamp));
+                file.write(reinterpret_cast<const char*>(&this->txRuntimeState), sizeof(this->txRuntimeState));
+                file.write(reinterpret_cast<const char*>(&this->dbIdx), sizeof(this->dbIdx));
+                file.write(reinterpret_cast<const char*>(&this->keySize), sizeof(this->keySize));
+                file.write(reinterpret_cast<const char*>(&this->valSize), sizeof(this->valSize));
+            }
+
+            void SetCRC(const std::string& k, const std::string& v) {
+                crc = CalculateCRC32Value(k, v);
+            }
+
+            bool CheckCRC(const std::string& k, const std::string& v) const {
+                return CalculateCRC32Value(k, v) == crc;
+            }
+
+            void TransferEndian() {
+                if constexpr (std::endian::native == std::endian::big)
+                    return;
+
+                this->crc = utils::ChangeIntegralEndian(this->crc);
+                this->timestamp = utils::ChangeIntegralEndian(this->timestamp);
+                this->keySize = utils::ChangeIntegralEndian(this->keySize);
+                this->valSize = utils::ChangeIntegralEndian(this->valSize);
+            }
+
+        private:
+            std::uint32_t CalculateCRC32Value(const std::string& k, const std::string& v) const {
+                auto crcVal = utils::CRC(reinterpret_cast<const char*>(&timestamp), sizeof(timestamp),
+                                         utils::CRC_INIT_VALUE);
+                crcVal = utils::CRC(reinterpret_cast<const char*>(&dbIdx), sizeof(dbIdx), crcVal);
+                crcVal = utils::CRC(reinterpret_cast<const char*>(&txRuntimeState), sizeof(txRuntimeState), crcVal);
+                crcVal = utils::CRC(reinterpret_cast<const char*>(&keySize), sizeof(keySize), crcVal);
+                crcVal = utils::CRC(reinterpret_cast<const char*>(&valSize), sizeof(valSize), crcVal);
+                crcVal = utils::CRC(k.data(), k.length(), crcVal);
+                crcVal = utils::CRC(v.data(), v.length(), crcVal);
+                return crcVal ^ utils::CRC_INIT_VALUE;
+            }
+
+            bool ValidateFileRecordHeader() const {
+                if (!utils::IsValidTimestamp(this->timestamp))
+                    return false;
+
+                if (RecordState::kData != this->txRuntimeState)
+                    return false;
+
+                if (this->dbIdx > Flags::GetInstance().dbMaxNum)
+                    return false;
+
+                if (this->keySize > Flags::GetInstance().keyMaxBytes)
+                    return false;
+
+                if (this->valSize > Flags::GetInstance().valMaxBytes)
+                    return false;
+
+                return true;
+            }
+
+            bool ValidateTxFlagRecord() const {
+                if (!utils::IsValidTimestamp(this->timestamp))
+                    return false;
+
+                if (RecordState::kData == this->txRuntimeState)
+                    return false;
+
+                if (this->dbIdx > Flags::GetInstance().dbMaxNum)
+                    return false;
+
+                if ((RecordState::kBegin != this->txRuntimeState) && (0 != this->keySize))
+                    return false;
+
+                if ((RecordState::kBegin == this->txRuntimeState) && (0 == this->keySize))
+                    return false;
+
+                if (this->valSize != 0)
+                    return false;
+
+                return true;
+            }
+        };
+
+        struct L1_CACHE_LINE_ALIGNAS FileRecordData {
+            std::string key;
+            std::string value;
+
+            static void LoadFromDisk(FileRecordData& data, std::fstream& file,
+                                     std::size_t keySize, std::size_t valSize) {
+                if (!keySize || !valSize) return;
+
+                data.key.resize(keySize);
+                data.value.resize(valSize);
+
+                file.read(data.key.data(), static_cast<std::streamsize>(keySize));
+                file.read(data.value.data(), static_cast<std::streamsize>(valSize));
+            }
+        };
+
+        struct L1_CACHE_LINE_ALIGNAS FileRecord {
+            FileRecordHeader header;
+            FileRecordData data;
+
+            static bool LoadFromDisk(FileRecord& record, std::fstream& file, std::streampos pos) {
+                if (!record.header.LoadFromDisk(file, pos))
+                    return false;
+
+                if (RecordState::kData == record.header.txRuntimeState) {
+                    FileRecordData::LoadFromDisk(record.data, file, record.header.keySize, record.header.valSize);
+                }
+
+                return record.header.CheckCRC(record.data.key, record.data.value);
+            }
+        };
+    }// namespace
+
+    DataLogFile::DataLogFile(const std::string& fileName)
+        : name{fileName},
+          file{fileName, std::ios::in | std::ios::out | std::ios::binary | std::ios::app} {
+        if (!file.is_open()) {
+            throw std::runtime_error{std::strerror(errno)};
+        }
+    }
+
+    const std::string& DataLogFile::Name() const { return this->name; }
+
+    DataLogFile::OffsetType DataLogFile::GetRowBySequence(Data& data) {
+        data.error = true;
+        if (this->file.eof())
+            return -1;
+
+        auto pos = this->file.tellg();
+        FileRecord record;
+        if (!FileRecord::LoadFromDisk(record, file, pos)) {
+            return -1;
+        }
+
+        data.error = false;
+        data.timestamp = record.header.timestamp;
+        data.dbIdx = record.header.dbIdx;
+        data.state = RecordState::kData;
+
+        if (RecordState::kBegin == record.header.txRuntimeState)
+            data.txNum = record.header.keySize;
+
+        data.key = std::move(record.data.key);
+        data.value = std::move(record.data.value);
+        return pos;
+    }
+
+    DataLogFile::Data DataLogFile::GetDataByOffset(DataLogFile::OffsetType offset) {
+        FileRecord record;
+        if (FileRecord::LoadFromDisk(record, file, offset)) {
+            file.seekp(0, std::fstream::end);
+            return DataLogFile::Data{
+                    .dbIdx = record.header.dbIdx,
+                    .state = RecordState::kData,
+                    .key = std::move(record.data.key),
+                    .value = std::move(record.data.value),
+            };
+        }
+        return DataLogFile::Data{.error = true};
+    }
+
+    DataLogFile::OffsetType DataLogFile::DumpToDisk(std::uint8_t dbIdx, const std::string& k, const std::string& v) {
+        DataLogFile::OffsetType pos = file.tellp();
+        FileRecordHeader header{
+                .crc = 0,
+                .timestamp = utils::GetMicrosecondTimestamp(),
+                .txRuntimeState = RecordState::kData,
+                .dbIdx = dbIdx,
+                .keySize = k.length(),
+                .valSize = v.length()};
+        header.SetCRC(k, v);
+        header.DumpToDisk(file);
+
+        file.write(k.data(), static_cast<std::streamsize>(k.length()));
+        file.write(v.data(), static_cast<std::streamsize>(v.length()));
+        file.flush();
+        return pos;
+    }
+
+    void DataLogFile::DumpTxFlagToDisk(std::uint8_t dbIdx, RecordState txFlag, std::size_t txCmdNum) {
+        FileRecordHeader header{
+                .crc = 0,
+                .timestamp = utils::GetMicrosecondTimestamp(),
+                .txRuntimeState = txFlag,
+                .dbIdx = dbIdx,
+                .keySize = (RecordState::kBegin == txFlag) ? txCmdNum : 0,
+                .valSize = 0};
+        header.SetCRC("", "");
+        header.DumpToDisk(file);
+        file.flush();
+    }
+
+    void DataLogFile::Rename(const std::string& newName) {
+        std::filesystem::rename(this->name, newName);
+        this->name = newName;
+    }
+
+    void DataLogFile::ClearOSFlag() { this->file.clear(); }
+
     DataLogFileManager::DataLogFileManager() {
         // 加载历史数据
         if (std::filesystem::exists(Flags::GetInstance().dbLogFileDir)) {
@@ -41,14 +288,11 @@ namespace foxbatdb {
 
         // 创建文件
         for (std::size_t i = 0; i < 1; ++i) {
-            auto fileName = BuildLogFileNameByIdx(i);
-            std::fstream file{fileName, std::ios::in | std::ios::out |
-                                                std::ios::binary | std::ios::app};
-            if (!file.is_open()) {
-                ServerLog::GetInstance().Fatal("log file create failed: {}", ::strerror(errno));
+            try {
+                mLogFilePool_.emplace_back(std::make_unique<DataLogFile>(BuildLogFileNameByIdx(i)));
+            } catch (const std::runtime_error& e) {
+                ServerLog::GetInstance().Fatal("log file create failed: {}", e.what());
             }
-            mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
         mWritableFileIter_ = mLogFilePool_.begin();
     }
@@ -61,7 +305,7 @@ namespace foxbatdb {
     void DataLogFileManager::Init() {}
 
     DataLogFile* DataLogFileManager::GetWritableDataFile() {
-        if (std::filesystem::file_size((*mWritableFileIter_)->name) > Flags::GetInstance().dbLogFileMaxSize) {
+        if (std::filesystem::file_size((*mWritableFileIter_)->Name()) > Flags::GetInstance().dbLogFileMaxSize) {
             if (std::next(mWritableFileIter_, 1) == mLogFilePool_.end())
                 PoolExpand();
         }
@@ -71,54 +315,16 @@ namespace foxbatdb {
     void DataLogFileManager::PoolExpand() {
         auto poolSize = mLogFilePool_.size();
         for (std::size_t i = poolSize; i < 1 + poolSize; ++i) {
-            auto fileName = BuildLogFileNameByIdx(i);
-            std::fstream file{fileName, std::ios::in | std::ios::out |
-                                                std::ios::binary | std::ios::app};
-            if (!file.is_open()) {
-                ServerLog::GetInstance().Error("data log file pool expand failed: {}", ::strerror(errno));
-                continue;
+            try {
+                mLogFilePool_.emplace_back(std::make_unique<DataLogFile>(BuildLogFileNameByIdx(i)));
+            } catch (const std::runtime_error& e) {
+                ServerLog::GetInstance().Error("data log file pool expand failed: {}", e.what());
             }
-
-            mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
 
         if (std::next(mWritableFileIter_, 1) != mLogFilePool_.end()) {
             ++mWritableFileIter_;
         }
-    }
-
-    static bool LoadHistoryTxFromDisk(DataLogFile* fileWrapper, std::uint64_t txNum) {
-        auto& file = fileWrapper->file;
-        auto& dbm = DatabaseManager::GetInstance();
-
-        std::vector<std::pair<std::streampos, FileRecord>> txRecords;
-        for (std::uint64_t i = 0; i < txNum; ++i) {
-            FileRecord txRecord;
-            auto pos = file.tellg();
-            if (!FileRecord::LoadFromDisk(txRecord, file, pos))
-                return false;
-            if (TxRuntimeState::kFailed == txRecord.header.txRuntimeState)
-                return true;
-            if (TxRuntimeState::kData != txRecord.header.txRuntimeState)
-                return false;
-            txRecords.emplace_back(pos, txRecord);
-        }
-
-        FileRecord txEndFlag;
-        if (!FileRecord::LoadFromDisk(txEndFlag, file, file.tellg())) return false;
-        if (TxRuntimeState::kFinish != txEndFlag.header.txRuntimeState) {
-            return false;
-        }
-
-        for (const auto& [pos, record]: txRecords) {
-            if (record.header.valSize > 0) {
-                dbm.GetDBByIndex(record.header.dbIdx)
-                        ->LoadHistoryData(fileWrapper, pos, record);
-            }
-        }
-
-        return true;
     }
 
     static bool ValidateDataLogFile(const std::filesystem::directory_entry& dir) {
@@ -153,36 +359,65 @@ namespace foxbatdb {
 
         // 按文件名字典序填充文件池
         for (const auto& fileName: fileNames) {
-            std::fstream file{fileName, std::ios::in | std::ios::out |
-                                                std::ios::binary | std::ios::app};
-            if (!file.is_open()) {
-                ServerLog::GetInstance().Error("history data log file open failed: {}", ::strerror(errno));
-                continue;
+            try {
+                mLogFilePool_.emplace_back(std::make_unique<DataLogFile>(fileName));
+            } catch (const std::runtime_error& e) {
+                ServerLog::GetInstance().Error("history data log file open failed: {}", e.what());
             }
-            mLogFilePool_.emplace_back(
-                    std::make_unique<DataLogFile>(fileName, std::move(file)));
         }
         return true;
     }
 
-    static void LoadHistoryRecordsFromSingleFile(DataLogFile* fileWrapper) {
-        for (auto& file = fileWrapper->file; !file.eof();) {
-            auto pos = file.tellg();
-            FileRecord record;
-            if (!FileRecord::LoadFromDisk(record, file, pos)) break;
+    static bool LoadHistoryTxFromDisk(DataLogFile* fileWrapper, std::uint64_t txNum) {
+        auto& dbm = DatabaseManager::GetInstance();
 
-            if (TxRuntimeState::kData == record.header.txRuntimeState) {
+        std::vector<std::pair<DataLogFile::OffsetType, DataLogFile::Data>> txRecords;
+        for (std::uint64_t i = 0; i < txNum; ++i) {
+            DataLogFile::Data txRecord;
+            auto offset = fileWrapper->GetRowBySequence(txRecord);
+            if (-1 == offset)
+                return false;
+
+            if (RecordState::kFailed == txRecord.state)
+                return true;
+            if (RecordState::kData != txRecord.state)
+                return false;
+            txRecords.emplace_back(offset, txRecord);
+        }
+
+        DataLogFile::Data txEndFlag;
+        if (-1 == fileWrapper->GetRowBySequence(txEndFlag))
+            return false;
+
+        if (RecordState::kFinish != txEndFlag.state)
+            return false;
+
+        for (const auto& [pos, record]: txRecords) {
+            if (!record.value.empty()) {
+                dbm.GetDBByIndex(record.dbIdx)
+                        ->LoadHistoryData(fileWrapper, pos, record);
+            }
+        }
+
+        return true;
+    }
+
+    static void LoadHistoryRecordsFromSingleFile(DataLogFile* fileWrapper) {
+        DataLogFile::Data data;
+        auto offset = fileWrapper->GetRowBySequence(data);
+        while (-1 != offset) {
+            if (RecordState::kData == data.state) {
                 // 恢复普通数据记录
-                if (record.header.valSize && !record.data.value.empty())
+                if (!data.value.empty())
                     DatabaseManager::GetInstance()
-                            .GetDBByIndex(record.header.dbIdx)
-                            ->LoadHistoryData(fileWrapper, pos, record);
+                            .GetDBByIndex(data.dbIdx)
+                            ->LoadHistoryData(fileWrapper, offset, data);
             } else {
                 // 恢复事务记录
-                if (TxRuntimeState::kBegin != record.header.txRuntimeState)
+                if (RecordState::kBegin != data.state)
                     break;
 
-                if (!LoadHistoryTxFromDisk(fileWrapper, record.header.keySize))
+                if (!LoadHistoryTxFromDisk(fileWrapper, data.txNum))
                     break;
             }
         }
@@ -196,7 +431,7 @@ namespace foxbatdb {
         // 依次读文件填充dict
         for (auto& fileWrapper: mLogFilePool_) {
             LoadHistoryRecordsFromSingleFile(fileWrapper.get());
-            fileWrapper->file.clear();
+            fileWrapper->ClearOSFlag();
         }
 
         // 设置可用文件位置
@@ -205,16 +440,12 @@ namespace foxbatdb {
 
     static std::unique_ptr<DataLogFile> CreateMergeLogFile() {
         // 创建merge文件
-        auto mergeFileName = BuildLogFileName("merge");
-        std::fstream mergeFile{mergeFileName, std::ios::in | std::ios::out |
-                                                      std::ios::binary | std::ios::app};
-        if (!mergeFile.is_open()) {
-            ServerLog::GetInstance().Error("merge data log file open failed: {}", ::strerror(errno));
+        try {
+            return std::make_unique<DataLogFile>(BuildLogFileName("merge"));
+        } catch (const std::runtime_error& e) {
+            ServerLog::GetInstance().Error("merge data log file open failed: {}", e.what());
             return nullptr;
         }
-
-        // 新建文件结构
-        return std::make_unique<DataLogFile>(mergeFileName, std::move(mergeFile));
     }
 
     void DataLogFileManager::ModifyDataFilesForMerge(FileIter& writableNode, FilePtr&& mergeLogFile) {
@@ -223,15 +454,14 @@ namespace foxbatdb {
 
         // 删除原先的只读文件
         for (auto it = mLogFilePool_.begin(); it != mergeFileIter;) {
-            std::filesystem::remove((*it)->name);
+            std::filesystem::remove((*it)->Name());
             it = mLogFilePool_.erase(it);
         }
 
         // 重命名merge文件
         for (auto it = mLogFilePool_.begin(); it != mLogFilePool_.end(); ++it) {
             auto name = BuildLogFileNameByIdx(std::distance(mLogFilePool_.begin(), it));
-            std::filesystem::rename((*it)->name, name);
-            (*it)->name = name;
+            (*it)->Rename(name);
         }
 
         // 设置可用文件位置

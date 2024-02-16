@@ -37,35 +37,6 @@ namespace foxbatdb {
 
     void DatabaseManager::Init() {}
 
-    bool DatabaseManager::LoadRecordsFromLogFile(const std::string& path) {
-        if (!std::filesystem::exists(path)) {
-            return false;
-        }
-        std::fstream file{path, std::ios_base::in | std::ios::binary};
-        if (!file.is_open()) {
-            ServerLog::GetInstance().Error("data log file open failed: {}", ::strerror(errno));
-            return false;
-        }
-
-        while (!file.eof()) {
-            FileRecord record;
-            if (!FileRecord::LoadFromDisk(record, file, file.tellg())) continue;
-
-            Database* db = GetDBByIndex(record.header.dbIdx);
-            auto& key = record.data.key;
-            auto& val = record.data.value;
-
-            if (!val.empty())
-                db->StrSet(key, val);
-            else {
-                if (auto ec = db->Del(key); ec) {
-                    ServerLog::GetInstance().Warning("load history key [] failed: []", key, ec.message());
-                }
-            }
-        }
-        return true;
-    }
-
     bool DatabaseManager::HaveMemoryAvailable() const {
         return std::any_of(mDBList_.begin(), mDBList_.end(),
                            [](const Database& db) -> bool { return db.HaveMemoryAvailable(); });
@@ -138,7 +109,7 @@ namespace foxbatdb {
         mIndex_.Put(key, snapshot);
     }
 
-    void Database::InsertTxFlag(TxRuntimeState txFlag, std::size_t txCmdNum) {
+    void Database::InsertTxFlag(RecordState txFlag, std::size_t txCmdNum) {
         mIndex_.InsertTxFlag(txFlag, txCmdNum);
     }
 
@@ -153,12 +124,12 @@ namespace foxbatdb {
     }
 
     void Database::LoadHistoryData(DataLogFile* file, std::streampos pos,
-                                   const FileRecord& record) {
+                                   const DataLogFile::Data& record) {
         MemoryIndex::HistoryDataInfo opt{
                 .logFilePtr = file,
                 .pos = pos,
-                .microSecondTimestamp = record.header.timestamp};
-        auto ec = mIndex_.PutHistoryData(record.data.key, opt);
+                .microSecondTimestamp = record.timestamp};
+        auto ec = mIndex_.PutHistoryData(record.key, opt);
         if (ec) {
             ServerLog::GetInstance().Warning("load history data failed: []", ec.message());
         }
@@ -306,7 +277,7 @@ namespace foxbatdb {
 
     std::string Database::StrGetRange(const std::string& key, std::int64_t start, std::int64_t end) {
         auto ptr = this->Get(key);
-        if (ptr.expired())  return "";
+        if (ptr.expired()) return "";
 
         std::size_t startPos, endPos;
         auto val = ptr.lock()->GetValue();
