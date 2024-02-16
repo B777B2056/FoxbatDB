@@ -31,6 +31,8 @@ namespace foxbatdb {
 
         this->dbLogFileDir = tbl["dbfile"]["dbFileDirectory"].value<std::string>().value();
         this->dbLogFileMaxSize = tbl["dbfile"]["dbFileMaxSizeMB"].value<std::uint64_t>().value();
+        this->dbFileMergeThreshold = tbl["dbfile"]["dbFileMergeThreshold"].value<std::uint16_t>().value();
+        this->dbFileMergeCronJobPeriodMs = tbl["dbfile"]["dbFileMergeCronJobPeriodMs"].value<std::int64_t>().value();
 
         this->keyMaxBytes = tbl["keyval"]["keyMaxBytes"].value<std::uint32_t>().value();
         this->valMaxBytes = tbl["keyval"]["valueMaxBytes"].value<std::uint32_t>().value();
@@ -47,12 +49,16 @@ namespace foxbatdb {
             this->maxMemoryPolicy = maxMemoryPolicyMap.at(maxMemoryPolicyStr);
         }
 
-        this->memorypoolMinSize = tbl["memory"]["memorypoolMinSize"].value<std::size_t>().value();
+        this->memoryPoolMinSize = tbl["memory"]["memoryPoolMinSize"].value<std::size_t>().value();
     }
 
     void Flags::Preprocess() {
         if (0 == threadNum) {
             threadNum = std::thread::hardware_concurrency();
+        }
+
+        if (0 == dbFileMergeThreshold) {
+            dbFileMergeThreshold = 64;
         }
 
         serverLogMaxFileSize = serverLogMaxFileSize * 1024 * 1024;

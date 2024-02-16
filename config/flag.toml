@@ -14,6 +14,8 @@ aofLogFilePath = "/mnt/e/jr/FoxbatDB/out/log/foxbatdb.oplog"
 [dbfile]
 dbFileDirectory = "/mnt/e/jr/FoxbatDB/out/log/db"
 dbFileMaxSizeMB = 512
+dbFileMergeThreshold = 1
+dbFileMergeCronJobPeriodMs = 3000
 
 [keyval]
 keyMaxBytes = 10240
@@ -22,4 +24,4 @@ valueMaxBytes = 10240
 [memory]
 # maxmemoryPolicy = "noeviction"
 maxmemoryPolicy = "allkeys-lru"
-memorypoolMinSize = 4096
+memoryPoolMinSize = 4096

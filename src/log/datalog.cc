@@ -487,7 +487,7 @@ namespace foxbatdb {
 
     void DataLogFileManager::Merge() {
         std::unique_lock l{mt_};
-        if (mLogFilePool_.size() < 2) return;
+        if (mLogFilePool_.size() < Flags::GetInstance().dbFileMergeThreshold) return;
         auto writableIterSnapshot = mWritableFileIter_;
 
         auto& dbm = DatabaseManager::GetInstance();

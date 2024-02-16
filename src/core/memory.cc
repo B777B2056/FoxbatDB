@@ -49,7 +49,7 @@ namespace foxbatdb {
         : mMemoryPoolBuf_{},
           mMemoryPool_{mMemoryPoolBuf_.data(), mMemoryPoolBuf_.size()},
           mAllocatedObjects_{&mMemoryPool_}, mFreeObjects_{&mMemoryPool_} {
-        for (std::size_t i = 0; i < Flags::GetInstance().memorypoolMinSize; ++i) {
+        for (std::size_t i = 0; i < Flags::GetInstance().memoryPoolMinSize; ++i) {
             auto ptr = std::make_unique<RecordObject>();
             mFreeObjects_.emplace_back(ptr.get());
             mAllocatedObjects_.emplace_back(std::move(ptr));

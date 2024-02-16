@@ -1,5 +1,6 @@
 #include "cron.h"
 #include "flag/flags.h"
+#include "log/datalog.h"
 #include "log/oplog.h"
 
 namespace foxbatdb {
@@ -33,7 +34,7 @@ namespace foxbatdb {
     }// namespace detail
 
     CronJobManager::CronJobManager()
-        : mIOContext_{}, mOperationLogDumpTimer_{mIOContext_} {
+        : mIOContext_{}, mOperationLogDumpTimer_{mIOContext_}, mDataLogFileMergeTimer_{mIOContext_} {
         mWait_ = std::async(
                 std::launch::async,
                 [this]() -> void {
@@ -58,11 +59,17 @@ namespace foxbatdb {
                 []() -> void {
                     OperationLog::GetInstance().DumpToDisk();
                 });
+        mDataLogFileMergeTimer_.SetTimeoutHandler(
+                []() -> void {
+                    DataLogFileManager::GetInstance().Merge();
+                });
     }
 
     void CronJobManager::Start() {
         mOperationLogDumpTimer_.Start(
                 std::chrono::milliseconds{Flags::GetInstance().operationLogWriteCronJobPeriodMs});
+        mDataLogFileMergeTimer_.Start(
+                std::chrono::milliseconds{Flags::GetInstance().dbFileMergeCronJobPeriodMs});
     }
 
     void CronJobManager::Init() {}
