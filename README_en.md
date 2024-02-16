@@ -1,5 +1,7 @@
 # FoxbatDB
 
+[жпнд](README.md)
+
 A lightweight Key-Value Database: supports ACID transactions, compatible with Redis commands
 
 * [Main Features](#1-main-features)

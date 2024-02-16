@@ -1,5 +1,7 @@
 # FoxbatDB
 
+[English](README_en.md)
+
 轻量级K-V数据库：支持事务ACID、兼容Redis命令
 
 * [主要特点](#1-主要特点)
@@ -57,51 +59,55 @@ FoxbatDB事务可视为Redis事务的ACID扩展，与Redis共用事务命令，�
 ## 3 快速开始
 
 ### 3.1 支持的命令
+
 ### 3.1.1 Redis命令
+
 * 数据库操作
-  - SELECT
-  - HELLO
-  - MOVE
+    - SELECT
+    - HELLO
+    - MOVE
 * 事务
-  - MULTI
-  - EXEC
-  - DISCARD
-  - WATCH
-  - UNWATCH
+    - MULTI
+    - EXEC
+    - DISCARD
+    - WATCH
+    - UNWATCH
 * 发布-订阅模式
-  - PUBLISH
-  - SUBSCRIBE
-  - UNSUBSCRIBE
+    - PUBLISH
+    - SUBSCRIBE
+    - UNSUBSCRIBE
 * Key-Value操作
-  - 读
-    - GET
-    - EXISTS
-    - GETRANGE
-    - MGET
-    - STRLEN
-    - TTL
-    - PTTL
-  - 写
-    - SET
-    - MSET
-    - APPEND
-  - 删
-    - DEL
-  - 改
-    - RENAME
-    - INCR
-    - DECR
-    - INCRBY
-    - DECRBY
-    - INCRBYFLOAT
+    - 读
+        - GET
+        - EXISTS
+        - GETRANGE
+        - MGET
+        - STRLEN
+        - TTL
+        - PTTL
+    - 写
+        - SET
+        - MSET
+        - APPEND
+    - 删
+        - DEL
+    - 改
+        - RENAME
+        - INCR
+        - DECR
+        - INCRBY
+        - DECRBY
+        - INCRBYFLOAT
 
 ### 3.1.2 扩展命令命令
+
 * MERGE：合并磁盘上的数据日志文件；成功时返回OK，失败时返回具体错误
 * PREFIX：查询符合特定前缀的Key-Value；以数组格式(key1, value1, key2, value2....)返回匹配的Key-Value
 
 ### 3.2 安装
 
 #### 3.2.1 从源码构建
+
 * Linux/Mac OS
 
 ```shell
