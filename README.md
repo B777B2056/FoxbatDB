@@ -134,7 +134,13 @@ make
 * 使用[google/benchmark](https://github.com/google/benchmark)进行性能测试
   ![benchmark](images/benchamrk.png)
 
-### 4.3 与Redis对比
+### 4.3 压力测试
+
+* 使用[locust](https://locust.io/)进行压力测试，
+* 读写平均耗时10ms左右。
+  ![stress](images/stress.png)
+
+### 4.4 与Redis对比
 
 * Redis各项设置均保持默认，版本为7.2.2
 * 对每一条命令，均运行100次，统计耗时平均值

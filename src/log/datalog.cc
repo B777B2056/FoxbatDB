@@ -437,6 +437,7 @@ namespace foxbatdb {
                 if (!LoadHistoryTxFromDisk(fileWrapper, data.txNum))
                     break;
             }
+            offset = fileWrapper->GetRowBySequence(data);
         }
     }
 

@@ -124,6 +124,7 @@ namespace foxbatdb {
 
     void DBServer::DoAccept() {
         this->acceptor_.async_accept(
+                ioContextPool_.GetIOContext(),
                 [this](std::error_code ec, asio::ip::tcp::socket socket) {
                     if (!acceptor_.is_open()) return;
 

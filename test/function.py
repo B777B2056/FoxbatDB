@@ -1,9 +1,9 @@
+# coding=utf-8
 import unittest
 import redis
 import utils
 import copy
 import time
-import random
 from typing import Dict
 from threading import Thread
 
@@ -146,8 +146,8 @@ class TestKeyValueOperators(unittest.TestCase):
 
         self.assertEqual(v[3:], self.client.getrange(k, 3, -1))
         self.assertEqual(v[-MaximumStrSize:], self.client.getrange(k, -MaximumStrSize, -1))
-        self.assertEqual(v[3:int(MaximumStrSize/2)+1], self.client.getrange(k, 3, int(MaximumStrSize/2)))
-        self.assertEqual(v[3:], self.client.getrange(k, 3, MaximumStrSize+9))
+        self.assertEqual(v[3:int(MaximumStrSize / 2) + 1], self.client.getrange(k, 3, int(MaximumStrSize / 2)))
+        self.assertEqual(v[3:], self.client.getrange(k, 3, MaximumStrSize + 9))
 
     def test_mset_mget(self):
         dataset = generateTestDataSet(32)

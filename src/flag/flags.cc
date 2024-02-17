@@ -57,8 +57,8 @@ namespace foxbatdb {
             threadNum = std::thread::hardware_concurrency();
         }
 
-        if (0 == dbFileMergeThreshold) {
-            dbFileMergeThreshold = 64;
+        if (dbFileMergeThreshold < 2) {
+            dbFileMergeThreshold = 2;
         }
 
         serverLogMaxFileSize = serverLogMaxFileSize * 1024 * 1024;

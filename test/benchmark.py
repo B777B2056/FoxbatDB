@@ -1,8 +1,6 @@
 # coding=utf-8
 import redis
 import time
-import random
-import string
 import math
 import utils
 from enum import Enum

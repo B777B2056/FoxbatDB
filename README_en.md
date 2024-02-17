@@ -142,7 +142,13 @@ make
 * Performance testing conducted using [google/benchmark](https://github.com/google/benchmark)
   ![Benchmark](images/benchamrk.png)
 
-### 4.3 Comparison with Redis
+### 4.3 Stress Test
+
+* Use [locust](https://locust.io/) for stress testing,
+* Reading and writing take about 10ms on average.
+  ![stress](images/stress.png)
+
+### 4.4 Comparison with Redis
 
 * Redis configurations kept at default, version 7.2.2
 * Each command run 100 times, average time consumption recorded
