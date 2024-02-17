@@ -5,9 +5,6 @@
 [submodule "3rdparty/asio"]
 	path = 3rdparty/asio
 	url = https://github.com/chriskohlhoff/asio.git
-[submodule "3rdparty/cmdline"]
-	path = 3rdparty/cmdline
-	url = https://github.com/tanakh/cmdline.git
 [submodule "3rdparty/toml++"]
 	path = 3rdparty/toml++
 	url = https://github.com/marzer/tomlplusplus.git

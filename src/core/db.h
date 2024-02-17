@@ -1,5 +1,6 @@
 #pragma once
 #include "engine.h"
+#include "frontend/cmdmap.h"
 #include "pubsub.h"
 #include <cstddef>
 #include <mutex>
@@ -8,7 +9,6 @@
 
 namespace foxbatdb {
     class CMDSession;
-    struct CommandOption;
     class Database;
     class MaxMemoryStrategy;
 

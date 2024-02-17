@@ -1,5 +1,4 @@
-﻿#include "cmdline.h"
-#include "core/db.h"
+﻿#include "core/db.h"
 #include "core/memory.h"
 #include "cron/cron.h"
 #include "flag/flags.h"
@@ -26,10 +25,15 @@ void MemoryAllocRetryFunc() {
 }
 
 std::string ParseArgs(int argc, char** argv) {
-    cmdline::parser parser;
-    parser.add<std::string>("flag-conf-path", 'f', "flag conf path", false, "config/flag.toml");
-    parser.parse_check(argc, argv);
-    return parser.get<std::string>("flag-conf-path");
+    if (argc != 2) {
+        throw std::runtime_error("arg number error");
+    }
+
+    std::string arg = argv[1];
+    if (!arg.starts_with("--flag-conf-path=")) {
+        throw std::runtime_error("arg error, please input flag-conf-path");
+    }
+    return arg.substr(arg.find_first_of('=') + 1);
 }
 
 void InitComponents(const std::string& flagConfPath) {
