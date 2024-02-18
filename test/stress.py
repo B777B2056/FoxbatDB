@@ -27,7 +27,7 @@ class RedisClient(object):
                 result = ''
         except Exception as e:
             total_time = int((time.time() - start_time) * 1000)
-            events.fire(request_type=command, name=key, response_time=total_time, exception=e)
+            events.request.fire(request_type=command, name=key, response_time=total_time, exception=e)
         else:
             total_time = int((time.time() - start_time) * 1000)
             length = len(str(result))
@@ -46,7 +46,7 @@ class RedisClient(object):
                 result = ''
         except Exception as e:
             total_time = int((time.time() - start_time) * 1000)
-            events.fire(request_type=command, name=key, response_time=total_time, exception=e)
+            events.request.fire(request_type=command, name=key, response_time=total_time, exception=e)
         else:
             total_time = int((time.time() - start_time) * 1000)
             length = len(str(result))
